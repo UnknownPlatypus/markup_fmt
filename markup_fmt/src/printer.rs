@@ -829,25 +829,34 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let (prefix, content) = self
-            .content
-            .strip_prefix('-')
-            .map(|content| ("-", content))
-            .unwrap_or(("", self.content));
-        let (content, suffix) = self
-            .content
-            .strip_suffix('-')
-            .map(|content| (content, "-"))
-            .unwrap_or((content, ""));
-        Doc::text("{%")
-            .append(Doc::text(prefix))
-            .append(Doc::line_or_space())
-            .append(Doc::text(content.trim()))
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(Doc::text(suffix))
-            .append(Doc::text("%}"))
-            .group()
+        match ctx.language {
+            Language::Jinja => {
+                let (prefix, content) = self
+                    .content
+                    .strip_prefix('-')
+                    .map(|content| ("-", content))
+                    .unwrap_or(("", self.content));
+                let (content, suffix) = self
+                    .content
+                    .strip_suffix('-')
+                    .map(|content| (content, "-"))
+                    .unwrap_or((content, ""));
+                Doc::text("{%")
+                    .append(Doc::text(prefix))
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(content.trim()))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(suffix))
+                    .append(Doc::text("%}"))
+                    .group()
+            }
+            Language::Django => {
+                Doc::text(format!("{{% {} %}}", self.content.trim()))
+            }
+            _ => unreachable!(),
+        }
+
     }
 }
 

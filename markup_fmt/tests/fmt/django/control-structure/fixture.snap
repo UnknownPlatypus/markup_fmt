@@ -47,14 +47,6 @@ source: markup_fmt/tests/fmt.rs
   Sold-out!
 {% endif %}
 
-{% macro input(name, value='', type='text', size=20) -%}
-  <input
-    type="{{ type }}"
-    name="{{ name }}"
-    value="{{
-        value|e }}"
-    size="{{ size }}"
-  >
-{%- endmacro %}
-
 <title>{% block title %}{% endblock %}</title>
+
+{% if kenny.sick %}{% include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg" %}{% endif %}
