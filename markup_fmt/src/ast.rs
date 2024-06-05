@@ -98,7 +98,7 @@ pub struct JinjaOrDjangoComment<'s> {
     pub raw: &'s str,
 }
 
-pub struct JinjaInterpolation<'s> {
+pub struct JinjaOrDjangoInterpolation<'s> {
     pub expr: &'s str,
 }
 
@@ -135,7 +135,7 @@ pub enum NodeKind<'s> {
     FrontMatter(FrontMatter<'s>),
     JinjaBlock(JinjaBlock<'s, Node<'s>>),
     JinjaOrDjangoComment(JinjaOrDjangoComment<'s>),
-    JinjaInterpolation(JinjaInterpolation<'s>),
+    JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation<'s>),
     JinjaTag(JinjaTag<'s>),
     SvelteAtTag(SvelteAtTag<'s>),
     SvelteAwaitBlock(Box<SvelteAwaitBlock<'s>>),

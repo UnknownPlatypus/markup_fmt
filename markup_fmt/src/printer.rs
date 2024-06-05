@@ -676,7 +676,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                             | NodeKind::SvelteInterpolation(..)
                             | NodeKind::Comment(..)
                             | NodeKind::AstroExpr(..)
-                            | NodeKind::JinjaInterpolation(..)
+                            | NodeKind::JinjaOrDjangoInterpolation(..)
                             | NodeKind::VentoInterpolation(..)
                     )
                 })
@@ -801,7 +801,7 @@ impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
+impl<'s> DocGen<'s> for JinjaOrDjangoInterpolation<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
@@ -821,7 +821,6 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
             }
             _ => unreachable!(),
         }
-
     }
 }
 
@@ -976,26 +975,20 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             NodeKind::Element(element) => element.doc(ctx, state),
             NodeKind::FrontMatter(front_matter) => front_matter.doc(ctx, state),
             NodeKind::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
-            Node::JinjaOrDjangoComment(jinja_comment) => jinja_comment.doc(ctx, state),
-            NodeKind::JinjaInterpolation(jinja_interpolation) => {
-                jinja_interpolation.doc(ctx, state)
-            }
+            NodeKind::JinjaOrDjangoComment(jinja_comment) => jinja_comment.doc(ctx, state),
+            NodeKind::JinjaOrDjangoInterpolation(jinja_interpolation) => jinja_interpolation.doc(ctx, state),
             NodeKind::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             NodeKind::SvelteAtTag(svelte_at_tag) => svelte_at_tag.doc(ctx, state),
             NodeKind::SvelteAwaitBlock(svelte_await_block) => svelte_await_block.doc(ctx, state),
             NodeKind::SvelteEachBlock(svelte_each_block) => svelte_each_block.doc(ctx, state),
             NodeKind::SvelteIfBlock(svelte_if_block) => svelte_if_block.doc(ctx, state),
-            NodeKind::SvelteInterpolation(svelte_interpolation) => {
-                svelte_interpolation.doc(ctx, state)
-            }
+            NodeKind::SvelteInterpolation(svelte_interpolation) => svelte_interpolation.doc(ctx, state),
             NodeKind::SvelteKeyBlock(svelte_key_block) => svelte_key_block.doc(ctx, state),
             NodeKind::Text(text_node) => text_node.doc(ctx, state),
             NodeKind::VentoBlock(vento_block) => vento_block.doc(ctx, state),
             NodeKind::VentoComment(vento_comment) => vento_comment.doc(ctx, state),
             NodeKind::VentoEval(vento_eval) => vento_eval.doc(ctx, state),
-            NodeKind::VentoInterpolation(vento_interpolation) => {
-                vento_interpolation.doc(ctx, state)
-            }
+            NodeKind::VentoInterpolation(vento_interpolation) => vento_interpolation.doc(ctx, state),
             NodeKind::VentoTag(vento_tag) => vento_tag.doc(ctx, state),
             NodeKind::VueInterpolation(vue_interpolation) => vue_interpolation.doc(ctx, state),
         }
@@ -1938,7 +1931,7 @@ fn is_text_like(node: &Node) -> bool {
         | NodeKind::VueInterpolation(..)
         | NodeKind::SvelteInterpolation(..)
         | NodeKind::AstroExpr(..)
-        | NodeKind::JinjaInterpolation(..)
+        | NodeKind::JinjaOrDjangoInterpolation(..)
         | NodeKind::VentoInterpolation(..) => true,
         NodeKind::Element(element) => element.tag_name.eq_ignore_ascii_case("label"),
         _ => false,

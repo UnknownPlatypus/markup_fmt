@@ -1372,8 +1372,8 @@ impl<'s> Parser<'s> {
                                 Language::Vue => {
                                     NodeKind::VueInterpolation(VueInterpolation { expr, start })
                                 }
-                                Language::Jinja => {
-                                    NodeKind::JinjaInterpolation(JinjaInterpolation { expr })
+                                Language::Jinja | Language::Django=> {
+                                    NodeKind::JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation { expr })
                                 }
                                 Language::Angular => {
                                     NodeKind::AngularInterpolation(AngularInterpolation {
