@@ -23,6 +23,7 @@ pub enum Language {
     Astro,
     Angular,
     Jinja,
+    Django,
     Vento,
 }
 
@@ -642,7 +643,7 @@ impl<'s> Parser<'s> {
                 .try_parse(Parser::parse_astro_attr)
                 .map(Attribute::Astro)
                 .or_else(|_| self.parse_native_attr().map(Attribute::Native)),
-            Language::Jinja => {
+            Language::Jinja | Language::Django => {
                 self.skip_ws();
                 let result = if matches!(self.chars.peek(), Some((_, '{'))) {
                     self.parse_jinja_tag_or_block(None, &mut Parser::parse_attr)
@@ -709,7 +710,7 @@ impl<'s> Parser<'s> {
         let quote = self.chars.next_if(|(_, c)| *c == '"' || *c == '\'');
 
         if let Some((start, quote)) = quote {
-            let is_jinja_or_vento = matches!(self.language, Language::Jinja | Language::Vento);
+            let is_jinja_or_vento = matches!(self.language, Language::Jinja | Language::Django | Language::Vento);
             let start = start + 1;
             let mut end = start;
             let mut chars_stack = vec![];
@@ -753,7 +754,7 @@ impl<'s> Parser<'s> {
             loop {
                 match self.chars.peek() {
                     Some((i, '{'))
-                        if matches!(self.language, Language::Jinja | Language::Vento) =>
+                    if matches!(self.language, Language::Jinja | Language::Django | Language::Vento) =>
                     {
                         end = *i;
                         let mut chars = self.chars.clone();
@@ -1338,7 +1339,7 @@ impl<'s> Parser<'s> {
                     Some((_, '!')) => {
                         if matches!(
                             self.language,
-                            Language::Html | Language::Astro | Language::Jinja | Language::Vento
+                            Language::Html | Language::Astro | Language::Jinja | Language::Django | Language::Vento
                         ) {
                             self.try_parse(Parser::parse_comment)
                                 .map(NodeKind::Comment)
@@ -1363,7 +1364,7 @@ impl<'s> Parser<'s> {
                     Some((_, '{'))
                         if matches!(
                             self.language,
-                            Language::Vue | Language::Jinja | Language::Angular
+                            Language::Vue | Language::Jinja | Language::Django | Language::Angular
                         ) =>
                     {
                         self.parse_mustache_interpolation().map(|(expr, start)| {
@@ -1404,11 +1405,11 @@ impl<'s> Parser<'s> {
                             _ => self.parse_text_node().map(NodeKind::Text),
                         }
                     }
-                    Some((_, '#')) if matches!(self.language, Language::Jinja) => {
+                    Some((_, '#')) if matches!(self.language, Language::Jinja| Language::Django) => {
                         self.parse_jinja_comment().map(NodeKind::JinjaComment)
                     }
                     Some((_, '@')) => self.parse_svelte_at_tag().map(NodeKind::SvelteAtTag),
-                    Some((_, '%')) if matches!(self.language, Language::Jinja) => {
+                    Some((_, '%')) if matches!(self.language, Language::Jinja | Language::Django) => {
                         self.parse_jinja_tag_or_block(None, &mut Parser::parse_node)
                     }
                     _ => match self.language {
@@ -2130,7 +2131,7 @@ impl<'s> Parser<'s> {
                         end = *i;
                         break;
                     }
-                    Language::Jinja => {
+                    Language::Jinja | Language::Django => {
                         let i = *i;
                         let mut chars = self.chars.clone();
                         chars.next();
