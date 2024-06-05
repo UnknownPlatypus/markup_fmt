@@ -7,6 +7,5 @@ source: markup_fmt/tests/fmt.rs
   {{ x }}
 </div>
 
-<span>{{
-  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-}}</span>
+<span>
+  {{ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx }}</span>

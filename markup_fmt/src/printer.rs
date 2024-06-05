@@ -806,13 +806,22 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        Doc::text("{{")
-            .append(Doc::line_or_space())
-            .append(Doc::text(self.expr.trim()))
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(Doc::text("}}"))
-            .group()
+        match ctx.language {
+            Language::Jinja => {
+                Doc::text("{{")
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(self.expr.trim()))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text("}}"))
+                    .group()
+            }
+            Language::Django => {
+                Doc::text(format!("{{{{ {} }}}}", self.expr.trim()))
+            }
+            _ => unreachable!(),
+        }
+
     }
 }
 
