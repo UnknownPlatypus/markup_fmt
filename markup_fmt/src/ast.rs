@@ -94,7 +94,7 @@ pub struct JinjaBlock<'s, T> {
     pub body: Vec<JinjaTagOrChildren<'s, T>>,
 }
 
-pub struct JinjaComment<'s> {
+pub struct JinjaOrDjangoComment<'s> {
     pub raw: &'s str,
 }
 
@@ -134,7 +134,7 @@ pub enum NodeKind<'s> {
     Element(Element<'s>),
     FrontMatter(FrontMatter<'s>),
     JinjaBlock(JinjaBlock<'s, Node<'s>>),
-    JinjaComment(JinjaComment<'s>),
+    JinjaOrDjangoComment(JinjaOrDjangoComment<'s>),
     JinjaInterpolation(JinjaInterpolation<'s>),
     JinjaTag(JinjaTag<'s>),
     SvelteAtTag(SvelteAtTag<'s>),

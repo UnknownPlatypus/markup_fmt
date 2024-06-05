@@ -772,19 +772,27 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaComment<'s> {
+impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         if ctx.options.format_comments {
-            Doc::text("{#")
-                .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim()))
-                .nest_with_ctx(ctx)
-                .append(Doc::line_or_space())
-                .append(Doc::text("#}"))
-                .group()
+            match ctx.language {
+                Language::Jinja => {
+                    Doc::text("{#")
+                        .append(Doc::line_or_space())
+                        .concat(reflow_with_indent(self.raw.trim()))
+                        .nest_with_ctx(ctx)
+                        .append(Doc::line_or_space())
+                        .append(Doc::text("#}"))
+                        .group()
+                }
+                Language::Django => {
+                    Doc::text(format!("{{# {} #}}", self.raw.trim()))
+                }
+                _ => unreachable!(),
+            }
         } else {
             Doc::text("{#")
                 .concat(reflow_raw(self.raw))
@@ -959,7 +967,7 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             NodeKind::Element(element) => element.doc(ctx, state),
             NodeKind::FrontMatter(front_matter) => front_matter.doc(ctx, state),
             NodeKind::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
-            NodeKind::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
+            Node::JinjaOrDjangoComment(jinja_comment) => jinja_comment.doc(ctx, state),
             NodeKind::JinjaInterpolation(jinja_interpolation) => {
                 jinja_interpolation.doc(ctx, state)
             }

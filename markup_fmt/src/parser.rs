@@ -1131,7 +1131,7 @@ impl<'s> Parser<'s> {
         Ok(children)
     }
 
-    fn parse_jinja_comment(&mut self) -> PResult<JinjaComment<'s>> {
+    fn parse_jinja_comment(&mut self) -> PResult<JinjaOrDjangoComment<'s>> {
         let Some((start, _)) = self
             .chars
             .next_if(|(_, c)| *c == '{')
@@ -1157,7 +1157,7 @@ impl<'s> Parser<'s> {
             }
         }
 
-        Ok(JinjaComment {
+        Ok(JinjaOrDjangoComment {
             raw: unsafe { self.source.get_unchecked(start..end) },
         })
     }
@@ -1406,7 +1406,7 @@ impl<'s> Parser<'s> {
                         }
                     }
                     Some((_, '#')) if matches!(self.language, Language::Jinja| Language::Django) => {
-                        self.parse_jinja_comment().map(NodeKind::JinjaComment)
+                        self.parse_jinja_comment().map(NodeKind::JinjaOrDjangoComment)
                     }
                     Some((_, '@')) => self.parse_svelte_at_tag().map(NodeKind::SvelteAtTag),
                     Some((_, '%')) if matches!(self.language, Language::Jinja | Language::Django) => {
