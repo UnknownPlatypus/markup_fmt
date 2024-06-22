@@ -108,13 +108,15 @@ source: markup_fmt/tests/fmt.rs
   <div>string</div>
 </div>
 <ul>
-  123<li
+  123
+  <li
     class="foo"
     id="bar"
   >
     First
   </li>
-  456<li class="baz">Second</li>
+  456
+  <li class="baz">Second</li>
   789
 </ul>
 <span>*<b>200</b></span>
@@ -153,7 +155,8 @@ source: markup_fmt/tests/fmt.rs
 <br />
 <br />
 <p>
-  "<span [innerHTML]="title"></span>
+  "
+  <span [innerHTML]="title"></span>
   " is the <i>property bound</i>
   title.
 </p>
@@ -210,7 +213,8 @@ source: markup_fmt/tests/fmt.rs
 
 <div>
   <button class="flex">Yee</button>
-  My focus trapped tooltip<button class="flex">Yee</button>
+  My focus trapped tooltip
+  <button class="flex">Yee</button>
   <button>Yee</button>
 </div>
 

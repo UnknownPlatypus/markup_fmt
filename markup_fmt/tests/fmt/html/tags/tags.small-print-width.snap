@@ -308,14 +308,16 @@ source: markup_fmt/tests/fmt.rs
 >
 <ul
 >
-  123<li
+  123
+  <li
     class="foo"
     id="bar"
   >
     First
   </li
   >
-  456<li
+  456
+  <li
     class="baz"
   >
     Second
@@ -410,7 +412,8 @@ source: markup_fmt/tests/fmt.rs
 />
 <p
 >
-  "<span
+  "
+  <span
     [innerHTML]="title"
   ></span
   >
@@ -587,7 +590,8 @@ source: markup_fmt/tests/fmt.rs
   My
   focus
   trapped
-  tooltip<button
+  tooltip
+  <button
     class="flex"
   >Yee</button
   >
