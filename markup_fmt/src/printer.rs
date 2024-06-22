@@ -1605,11 +1605,10 @@ where
                             }
                         }
                         child => {
-                            if !is_prev_text_like
-                                || !is_text_like(child)
-                                    && docs.last().map_or(false, |doc| !might_be_a_newline(doc))
-                            {
+                            if !is_prev_text_like {
                                 docs.push(Doc::hard_line());
+                            } else if !is_text_like(child) {
+                                add_or_promote_to_newline(&mut docs);
                             }
                             docs.push(child.doc(ctx, state));
                         }
@@ -1637,12 +1636,21 @@ fn is_text_like(node: &Node) -> bool {
         _ => false,
     }
 }
-
-fn might_be_a_newline(doc: &Doc) -> bool {
-    match doc {
-        Doc::NewLine => true,
-        Doc::List(doc_vec) if matches!(&doc_vec[..], [Doc::EmptyLine, Doc::NewLine]) => true,
-        _ => false,
+fn add_or_promote_to_newline(docs: &mut Vec<Doc>) {
+    if let Some(doc) = docs.last() {
+        match doc {
+            Doc::NewLine => {}
+            Doc::List(doc_vec) if matches!(&doc_vec[..], [Doc::EmptyLine, Doc::NewLine]) => {}
+            Doc::Group(doc_vec) if matches!(&doc_vec[..], [Doc::Break(1, 0)]) => {
+                docs.pop();
+                docs.push(Doc::hard_line())
+            }
+            Doc::Break(1, 0) => {
+                docs.pop();
+                docs.push(Doc::hard_line())
+            }
+            _ => docs.push(Doc::hard_line()),
+        };
     }
 }
 fn format_children_without_inserting_linebreak<'s, E, F>(
