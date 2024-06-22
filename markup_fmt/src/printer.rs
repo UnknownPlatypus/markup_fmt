@@ -1577,11 +1577,6 @@ where
             .fold(
                 (Vec::with_capacity(children.len() * 2), true),
                 |(mut docs, is_prev_text_like), (i, child)| {
-                    let maybe_hard_line = if is_prev_text_like {
-                        None
-                    } else {
-                        Some(Doc::hard_line())
-                    };
                     match child {
                         Node::Text(text_node) => {
                             let is_first = i == 0;
@@ -1594,8 +1589,8 @@ where
                                     docs.push(Doc::hard_line());
                                 }
                             } else {
-                                if let Some(hard_line) = maybe_hard_line {
-                                    docs.push(hard_line);
+                                if !is_prev_text_like {
+                                    docs.push(Doc::hard_line());
                                 } else if let Some(doc) =
                                     should_add_whitespace_before_text_node(text_node, is_first)
                                 {
@@ -1610,27 +1605,16 @@ where
                             }
                         }
                         child => {
-                            if let Some(hard_line) = maybe_hard_line {
-                                docs.push(hard_line);
+                            if !is_prev_text_like
+                                || !is_text_like(child)
+                                    && docs.last().map_or(false, |doc| !might_be_a_newline(doc))
+                            {
+                                docs.push(Doc::hard_line());
                             }
                             docs.push(child.doc(ctx, state));
                         }
                     };
-                    (
-                        docs,
-                        match child {
-                            Node::Text(..)
-                            | Node::VueInterpolation(..)
-                            | Node::SvelteInterpolation(..)
-                            | Node::AstroExpr(..)
-                            | Node::JinjaInterpolation(..)
-                            | Node::VentoInterpolation(..) => true,
-                            Node::Element(element) => {
-                                element.tag_name.eq_ignore_ascii_case("label")
-                            }
-                            _ => false,
-                        },
-                    )
+                    (docs, is_text_like(child))
                 },
             )
             .0,
@@ -1638,6 +1622,35 @@ where
     .group()
 }
 
+/// Determines if a given node is "text-like".
+/// Text-like nodes should remain on the same line whenever possible.
+fn is_text_like(node: &Node) -> bool {
+    match node {
+        Node::Text(..)
+        | Node::VueInterpolation(..)
+        | Node::SvelteInterpolation(..)
+        | Node::AstroExpr(..)
+        | Node::JinjaInterpolation(..)
+        | Node::VentoInterpolation(..) => true,
+        Node::Element(element) => element.tag_name.eq_ignore_ascii_case("label"),
+        _ => false,
+    }
+}
+
+fn might_be_a_newline(doc: &Doc) -> bool {
+    match doc {
+        Doc::NewLine | Doc::Break(1, 0) => true,
+        Doc::List(doc_vec) | Doc::Group(doc_vec)
+            if matches!(
+                &doc_vec[..],
+                [Doc::Break(1, 0)] | [Doc::EmptyLine, Doc::NewLine]
+            ) =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
 fn format_children_without_inserting_linebreak<'s, E, F>(
     children: &[Node<'s>],
     has_two_more_non_text_children: bool,
