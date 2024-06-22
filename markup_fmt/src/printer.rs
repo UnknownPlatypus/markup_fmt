@@ -1631,7 +1631,8 @@ fn is_text_like(node: &Node) -> bool {
         | Node::SvelteInterpolation(..)
         | Node::AstroExpr(..)
         | Node::JinjaInterpolation(..)
-        | Node::VentoInterpolation(..) => true,
+        | Node::VentoInterpolation(..)
+        | Node::Comment(..) => true,
         Node::Element(element) => element.tag_name.eq_ignore_ascii_case("label"),
         _ => false,
     }
