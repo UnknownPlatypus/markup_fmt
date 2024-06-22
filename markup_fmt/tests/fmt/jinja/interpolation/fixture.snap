@@ -14,3 +14,8 @@ source: markup_fmt/tests/fmt.rs
 <div>
   {{ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx }}
 </div>
+
+<div>
+  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx {{ ff }}<button
+  >Yee</button>
+</div>
