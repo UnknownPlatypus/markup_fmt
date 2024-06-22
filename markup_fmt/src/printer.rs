@@ -1640,15 +1640,8 @@ fn is_text_like(node: &Node) -> bool {
 
 fn might_be_a_newline(doc: &Doc) -> bool {
     match doc {
-        Doc::NewLine | Doc::Break(1, 0) => true,
-        Doc::List(doc_vec) | Doc::Group(doc_vec)
-            if matches!(
-                &doc_vec[..],
-                [Doc::Break(1, 0)] | [Doc::EmptyLine, Doc::NewLine]
-            ) =>
-        {
-            true
-        }
+        Doc::NewLine => true,
+        Doc::List(doc_vec) if matches!(&doc_vec[..], [Doc::EmptyLine, Doc::NewLine]) => true,
         _ => false,
     }
 }
