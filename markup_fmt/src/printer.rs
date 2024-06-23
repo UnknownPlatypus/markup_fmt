@@ -1607,13 +1607,13 @@ where
                         child => {
                             if !is_prev_text_like {
                                 docs.push(Doc::hard_line());
-                            } else if !is_text_like(child) {
+                            } else if !is_text_like(child, ctx) {
                                 add_or_promote_to_newline(&mut docs);
                             }
                             docs.push(child.doc(ctx, state));
                         }
                     };
-                    (docs, is_text_like(child))
+                    (docs, is_text_like(child, ctx))
                 },
             )
             .0,
@@ -1623,7 +1623,10 @@ where
 
 /// Determines if a given node is "text-like".
 /// Text-like nodes should remain on the same line whenever possible.
-fn is_text_like(node: &Node) -> bool {
+fn is_text_like<'s, E, F>(node: &Node, ctx: &mut Ctx<'_, E, F>) -> bool
+where
+    F: for<'a> FnMut(&Path, &'a str, usize) -> Result<Cow<'a, str>, E>,
+{
     match node {
         Node::Text(..)
         | Node::VueInterpolation(..)
@@ -1632,7 +1635,7 @@ fn is_text_like(node: &Node) -> bool {
         | Node::JinjaInterpolation(..)
         | Node::VentoInterpolation(..)
         | Node::Comment(..) => true,
-        Node::Element(element) => element.tag_name.eq_ignore_ascii_case("label"),
+        Node::Element(element) => ctx.is_whitespace_sensitive(element.tag_name),
         _ => false,
     }
 }
