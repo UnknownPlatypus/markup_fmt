@@ -30,6 +30,7 @@ pub enum Language {
 pub struct Parser<'s> {
     source: &'s str,
     language: Language,
+    custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     state: ParserState,
 }
@@ -40,10 +41,11 @@ struct ParserState {
 }
 
 impl<'s> Parser<'s> {
-    pub fn new(source: &'s str, language: Language) -> Self {
+    pub fn new(source: &'s str, language: Language, custom_blocks: Vec<String>) -> Self {
         Self {
             source,
             language,
+            custom_blocks,
             chars: source.char_indices().peekable(),
             state: Default::default(),
         }
@@ -710,7 +712,10 @@ impl<'s> Parser<'s> {
         let quote = self.chars.next_if(|(_, c)| *c == '"' || *c == '\'');
 
         if let Some((start, quote)) = quote {
-            let is_jinja_or_vento = matches!(self.language, Language::Jinja | Language::Django | Language::Vento);
+            let is_jinja_or_vento = matches!(
+                self.language,
+                Language::Jinja | Language::Django | Language::Vento
+            );
             let start = start + 1;
             let mut end = start;
             let mut chars_stack = vec![];
@@ -754,7 +759,10 @@ impl<'s> Parser<'s> {
             loop {
                 match self.chars.peek() {
                     Some((i, '{'))
-                    if matches!(self.language, Language::Jinja | Language::Django | Language::Vento) =>
+                        if matches!(
+                            self.language,
+                            Language::Jinja | Language::Django | Language::Vento
+                        ) =>
                     {
                         end = *i;
                         let mut chars = self.chars.clone();
@@ -1207,22 +1215,48 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if matches!(
-            tag_name,
-            "for"
-                | "if"
-                | "macro"
-                | "call"
-                | "filter"
-                | "block"
-                | "apply"
-                | "autoescape"
-                | "embed"
-                | "with"
-                | "set"
-                | "trans"
-                | "raw"
-        ) {
+        if matches!(self.language, Language::Jinja)
+            && matches!(
+                tag_name,
+                "for"
+                    | "if"
+                    | "macro"
+                    | "call"
+                    | "filter"
+                    | "block"
+                    | "apply"
+                    | "autoescape"
+                    | "embed"
+                    | "with"
+                    | "set"
+                    | "trans"
+                    | "raw"
+            )
+            || (matches!(self.language, Language::Django)
+                && matches!(
+                    tag_name,
+                    "autoescape"
+                        | "block"
+                        | "blocktrans"
+                        | "blocktranslate"
+                        | "cache"
+                        | "comment"
+                        | "filter"
+                        | "for"
+                        | "if"
+                        | "ifchanged"
+                        | "language"
+                        | "localize"
+                        | "localtime"
+                        | "spaceless"
+                        | "tag"
+                        | "timezone"
+                        | "upper"
+                        | "verbatim"
+                        | "with"
+                )
+                || self.custom_blocks.iter().any(|s| s == tag_name))
+        {
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
 
             loop {
@@ -1339,7 +1373,11 @@ impl<'s> Parser<'s> {
                     Some((_, '!')) => {
                         if matches!(
                             self.language,
-                            Language::Html | Language::Astro | Language::Jinja | Language::Django | Language::Vento
+                            Language::Html
+                                | Language::Astro
+                                | Language::Jinja
+                                | Language::Django
+                                | Language::Vento
                         ) {
                             self.try_parse(Parser::parse_comment)
                                 .map(NodeKind::Comment)
@@ -1372,7 +1410,7 @@ impl<'s> Parser<'s> {
                                 Language::Vue => {
                                     NodeKind::VueInterpolation(VueInterpolation { expr, start })
                                 }
-                                Language::Jinja | Language::Django=> {
+                                Language::Jinja | Language::Django => {
                                     NodeKind::JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation { expr })
                                 }
                                 Language::Angular => {

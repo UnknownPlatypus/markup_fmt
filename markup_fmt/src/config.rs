@@ -251,6 +251,10 @@ pub struct LanguageOptions {
     /// See [`astroAttrShorthand`](https://github.com/g-plane/markup_fmt/blob/main/docs/config.md#astroattrshorthand) on GitHub
     pub astro_attr_shorthand: Option<bool>,
 
+    #[cfg_attr(feature = "config_serde", serde(alias = "customBlocks"))]
+    /// See [`customBlocks`](https://github.com/g-plane/markup_fmt/blob/main/docs/config.md#customblocks) on GitHub
+    pub custom_blocks: Option<Vec<String>>,
+
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreCommentDirective"))]
     /// See [`ignoreCommentDirective`](https://github.com/g-plane/markup_fmt/blob/main/docs/config.md#ignorecommentdirective) on GitHub
     pub ignore_comment_directive: String,
@@ -295,6 +299,7 @@ impl Default for LanguageOptions {
             svelte_attr_shorthand: None,
             svelte_directive_shorthand: None,
             astro_attr_shorthand: None,
+            custom_blocks: None,
             ignore_comment_directive: "markup-fmt-ignore".into(),
         }
     }

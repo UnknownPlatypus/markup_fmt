@@ -55,7 +55,11 @@ pub fn format_text<E, F>(
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
-    let mut parser = Parser::new(code, language.clone());
+    let mut parser = Parser::new(
+        code,
+        language.clone(),
+        options.language.custom_blocks.clone().unwrap_or_default(),
+    );
     let ast = parser.parse_root().map_err(FormatError::Syntax)?;
     let mut ctx = Ctx {
         source: code,
