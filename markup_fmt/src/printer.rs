@@ -1576,9 +1576,7 @@ where
                                     docs.push(Doc::hard_line());
                                 }
                             } else {
-                                if let Some(hard_line) = maybe_hard_line {
-                                    docs.push(hard_line);
-                                } else if let Some(doc) =
+                                if let Some(doc) =
                                     should_add_whitespace_before_text_node(text_node, is_first)
                                 {
                                     docs.push(doc);
