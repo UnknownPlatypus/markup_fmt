@@ -1460,6 +1460,7 @@ fn is_all_ascii_whitespace(s: &str) -> bool {
 fn should_add_whitespace_before_text_node<'s>(
     text_node: &TextNode<'s>,
     is_first: bool,
+    is_prev_text_like: bool,
 ) -> Option<Doc<'s>> {
     let trimmed = text_node
         .raw
@@ -1472,7 +1473,8 @@ fn should_add_whitespace_before_text_node<'s>(
             .filter(|c| *c == '\n')
             .count();
         match line_breaks_count {
-            0 => Some(Doc::soft_line()),
+            0 if is_prev_text_like => Some(Doc::soft_line()),
+            0 => Some(Doc::line_or_space()),
             1 => Some(Doc::hard_line()),
             _ => Some(Doc::empty_line().append(Doc::hard_line())),
         }
@@ -1577,7 +1579,7 @@ where
                                 }
                             } else {
                                 if let Some(doc) =
-                                    should_add_whitespace_before_text_node(text_node, is_first)
+                                    should_add_whitespace_before_text_node(text_node, is_first, is_prev_text_like)
                                 {
                                     docs.push(doc);
                                 }
@@ -1657,7 +1659,9 @@ where
                     }
 
                     let mut docs = Vec::with_capacity(3);
-                    if let Some(doc) = should_add_whitespace_before_text_node(text_node, is_first) {
+                    if let Some(doc) =
+                        should_add_whitespace_before_text_node(text_node, is_first, true)
+                    {
                         docs.push(doc);
                     }
                     docs.push(text_node.doc(ctx, state));

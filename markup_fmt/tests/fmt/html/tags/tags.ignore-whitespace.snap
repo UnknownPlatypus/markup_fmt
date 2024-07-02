@@ -227,5 +227,6 @@ source: markup_fmt/tests/fmt.rs
     class="ds-btn ds-btn--xs ds-mt-8 ds-w-full"
   >
     close
-  </button> Foo
+  </button>
+  Foo
 </div>
