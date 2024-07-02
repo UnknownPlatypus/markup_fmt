@@ -2,7 +2,8 @@
 source: markup_fmt/tests/fmt.rs
 ---
 <div>
-  Foo <Tag />
+  Foo
+  <Tag />
 
   <Tag />
 </div>

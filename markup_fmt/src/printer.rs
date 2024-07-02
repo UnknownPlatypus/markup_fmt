@@ -1592,6 +1592,16 @@ where
                         child => {
                             if let Some(hard_line) = maybe_hard_line {
                                 docs.push(hard_line);
+                            } else if is_prev_text_like && !is_current_text_like  {
+                                // Replace `Doc::soft_line()` with `Doc::line_or_nil()` to allow wrapping.
+                                docs.last_mut().map(|last_doc| {
+                                    if matches!(
+                                        last_doc,
+                                        Doc::Group(doc_vec) if matches!(&doc_vec[..], [Doc::Break(1, 0)])
+                                    ){
+                                        *last_doc = Doc::line_or_space();
+                                    }
+                                });
                             }
                             docs.push(child.doc(ctx, state));
                         }

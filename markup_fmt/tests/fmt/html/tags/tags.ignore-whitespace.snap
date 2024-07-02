@@ -199,7 +199,8 @@ source: markup_fmt/tests/fmt.rs
 
 <!-- text + element inside tag -->
 <div>
-  My focus trapped tooltip <button>Yee</button>
+  My focus trapped tooltip
+  <button>Yee</button>
   <button>Yee</button>
 </div>
 <div>
@@ -219,7 +220,8 @@ source: markup_fmt/tests/fmt.rs
 </div>
 <div class="ds-tooltip-content">
   <button></button>
-  Foo <button
+  Foo
+  <button
     type="button"
     data-target="ds-tooltip.close"
     class="ds-btn ds-btn--xs ds-mt-8 ds-w-full"
