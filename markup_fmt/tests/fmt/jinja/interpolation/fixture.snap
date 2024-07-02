@@ -8,19 +8,22 @@ source: markup_fmt/tests/fmt.rs
 <span>{{
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 }}</span>
-
 <div>
   {{ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx }}
 </div>
 
+<div>
+  {{ ff }} My focus trapped tooltip <button
+    type="button"
+    data-target="ds-tooltip.close"
+    class="ds-btn ds-btn--xs ds-mt-8 ds-w-full"
+  >close</button>
+</div>
+
 <div>Hello {{ user.first_name }} {{ user.last_name }}!</div>
-
 <span>Hello {{ user.first_name }} {{ user.last_name }}!</span>
-
 <div>Flat rate for {{ nb_months }} month{{ nb_months|pluralize }}</div>
-
 <div>{{ first_idx }}-{{ last_idx }} of {{ total_count }} lines</div>
-
 <div>
   Hello {{ user.first_name }} {{ user.last_name }}!
 </div>
