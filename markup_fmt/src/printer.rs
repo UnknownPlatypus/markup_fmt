@@ -1561,11 +1561,6 @@ where
                 (Vec::with_capacity(children.len() * 2), true),
                 |(mut docs, is_prev_text_like), (i, child)| {
                     let is_current_text_like = is_text_like(child);
-                    let maybe_hard_line = if is_prev_text_like || is_current_text_like {
-                        None
-                    } else {
-                        Some(Doc::hard_line())
-                    };
                     match child {
                         Node::Text(text_node) => {
                             let is_first = i == 0;
@@ -1592,18 +1587,20 @@ where
                             }
                         }
                         child => {
-                            if let Some(hard_line) = maybe_hard_line {
-                                docs.push(hard_line);
-                            } else if is_prev_text_like && !is_current_text_like  {
-                                // Replace `Doc::soft_line()` with `Doc::line_or_nil()` to allow wrapping.
-                                docs.last_mut().map(|last_doc| {
-                                    if matches!(
+                            if !is_current_text_like {
+                                if !is_prev_text_like {
+                                    docs.push(Doc::hard_line())
+                                } else {
+                                    // Replace `Doc::soft_line()` with `Doc::line_or_nil()` to allow wrapping.
+                                    docs.last_mut().map(|last_doc| {
+                                        if matches!(
                                         last_doc,
                                         Doc::Group(doc_vec) if matches!(&doc_vec[..], [Doc::Break(1, 0)])
                                     ){
-                                        *last_doc = Doc::line_or_space();
-                                    }
-                                });
+                                            *last_doc = Doc::line_or_space();
+                                        }
+                                    });
+                                }
                             }
                             docs.push(child.doc(ctx, state));
                         }
