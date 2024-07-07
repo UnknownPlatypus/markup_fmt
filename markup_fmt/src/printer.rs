@@ -459,11 +459,16 @@ impl<'s> DocGen<'s> for Element<'s> {
                     ClosingTagLineBreakForEmpty::Never => {}
                 };
             }
-        } else if !is_whitespace_sensitive && has_two_more_non_text_children {
+        } else if !is_whitespace_sensitive {
             docs.push(leading_ws.nest_with_ctx(ctx));
             docs.push(
-                format_children_with_inserting_linebreak(&self.children, ctx, &state)
-                    .nest_with_ctx(ctx),
+                format_children_with_inserting_linebreak(
+                    &self.children,
+                    nb_non_text_children(&self.children),
+                    ctx,
+                    &state,
+                )
+                .nest_with_ctx(ctx),
             );
             docs.push(trailing_ws);
         } else if is_whitespace_sensitive
@@ -750,8 +755,13 @@ impl<'s> DocGen<'s> for Root<'s> {
             )
             || !is_whitespace_sensitive && has_two_more_non_text_children
         {
-            format_children_with_inserting_linebreak(&self.children, ctx, state)
-                .append(Doc::hard_line())
+            format_children_with_inserting_linebreak(
+                &self.children,
+                nb_non_text_children(&self.children),
+                ctx,
+                state,
+            )
+            .append(Doc::hard_line())
         } else {
             format_children_without_inserting_linebreak(
                 &self.children,
@@ -1508,8 +1518,11 @@ fn should_add_whitespace_after_text_node<'s>(
     }
 }
 
+fn nb_non_text_children(children: &[Node]) -> usize {
+    children.iter().filter(|child| !is_text_like(child)).count()
+}
 fn has_two_more_non_text_children(children: &[Node]) -> bool {
-    children.iter().filter(|child| !is_text_like(child)).count() > 1
+    nb_non_text_children(children) > 1
 }
 
 fn format_attr_value<'a>(
@@ -1547,12 +1560,20 @@ fn format_attr_value<'a>(
 
 fn format_children_with_inserting_linebreak<'s, E, F>(
     children: &[Node<'s>],
+    nb_non_text_children: usize,
     ctx: &mut Ctx<'_, E, F>,
     state: &State<'s>,
 ) -> Doc<'s>
 where
     F: for<'a> FnMut(&Path, &'a str, usize) -> Result<Cow<'a, str>, E>,
 {
+    let line = if nb_non_text_children > 1 {
+        Doc::hard_line()
+    } else if nb_non_text_children > 0 {
+        Doc::line_or_space()
+    } else {
+        Doc::soft_line()
+    };
     Doc::list(
         children
             .iter()
@@ -1570,7 +1591,7 @@ where
                                     if text_node.line_breaks > 1 {
                                         docs.push(Doc::empty_line());
                                     }
-                                    docs.push(Doc::hard_line());
+                                    docs.push(line.clone());
                                 }
                             } else {
                                 if let Some(doc) =
@@ -1589,7 +1610,7 @@ where
                         child => {
                             if !is_current_text_like {
                                 if !is_prev_text_like {
-                                    docs.push(Doc::hard_line())
+                                    docs.push(line.clone())
                                 } else {
                                     // Replace `Doc::soft_line()` with `Doc::line_or_nil()` to allow wrapping.
                                     docs.last_mut().map(|last_doc| {

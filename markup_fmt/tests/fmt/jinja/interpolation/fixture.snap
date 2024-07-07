@@ -13,7 +13,8 @@ source: markup_fmt/tests/fmt.rs
 </div>
 
 <div>
-  {{ ff }} My focus trapped tooltip <button
+  {{ ff }} My focus trapped tooltip
+  <button
     type="button"
     data-target="ds-tooltip.close"
     class="ds-btn ds-btn--xs ds-mt-8 ds-w-full"
@@ -43,7 +44,8 @@ source: markup_fmt/tests/fmt.rs
 </div>
 
 <div class="ds-tooltip-content">
-  {{ dd }} My focus trapped tooltip <button
+  {{ dd }} My focus trapped tooltip
+  <button
     type="button"
     data-target="ds-tooltip.close"
     class="ds-btn ds-btn--xs ds-mt-8 ds-w-full"
