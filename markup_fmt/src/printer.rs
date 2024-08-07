@@ -943,6 +943,11 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                         .current_tag_name
                         .map(|name| name.eq_ignore_ascii_case("iframe"))
                         .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("accept-charset")
+                    && state
+                        .current_tag_name
+                        .map(|name| name.eq_ignore_ascii_case("form"))
+                        .unwrap_or_default()
             {
                 docs.push(Doc::text(value.split_ascii_whitespace().join(" ")));
             } else if self.name.eq_ignore_ascii_case("style") {
