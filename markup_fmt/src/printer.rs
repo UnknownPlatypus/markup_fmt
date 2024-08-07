@@ -998,6 +998,11 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                         .current_tag_name
                         .map(|name| name.eq_ignore_ascii_case("iframe"))
                         .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("accept-charset")
+                    && state
+                        .current_tag_name
+                        .map(|name| name.eq_ignore_ascii_case("form"))
+                        .unwrap_or_default()
             {
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
