@@ -920,6 +920,10 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             docs.push(Doc::text("="));
             docs.push(quote.clone());
             if self.name.eq_ignore_ascii_case("class")
+                || self.name.eq_ignore_ascii_case("aria-labelledby")
+                || self.name.eq_ignore_ascii_case("aria-describedby")
+                || self.name.eq_ignore_ascii_case("aria-controls")
+                || self.name.eq_ignore_ascii_case("aria-owns")
                 || self.name.eq_ignore_ascii_case("rel")
                     && state
                         .current_tag_name
