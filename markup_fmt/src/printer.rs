@@ -929,6 +929,15 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                                 .any(|tag| tag.eq_ignore_ascii_case(name))
                         })
                         .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("autocomplete")
+                    && state
+                        .current_tag_name
+                        .map(|name| {
+                            ["form", "input", "select", "textarea"]
+                                .iter()
+                                .any(|tag| tag.eq_ignore_ascii_case(name))
+                        })
+                        .unwrap_or_default()
             {
                 docs.push(Doc::text(value.split_ascii_whitespace().join(" ")));
             } else if self.name.eq_ignore_ascii_case("style") {
