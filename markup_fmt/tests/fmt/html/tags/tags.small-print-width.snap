@@ -1,5 +1,6 @@
 ---
 source: markup_fmt/tests/fmt.rs
+snapshot_kind: text
 ---
 <br
 />
@@ -62,27 +63,19 @@ source: markup_fmt/tests/fmt.rs
   string
 </div
 >
-<div
-  very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute
->
+<div very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute>
   string
 </div
 >
-<div
-  very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute="value"
->
+<div very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute="value">
   string
 </div
 >
-<div
-  attribute="very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-value"
->
+<div attribute="very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-value">
   string
 </div
 >
-<div
-  attribute="value"
->
+<div attribute="value">
   very
   very
   very
@@ -314,9 +307,7 @@ source: markup_fmt/tests/fmt.rs
   >
     First
   </li
-  >456<li
-    class="baz"
-  >
+  >456<li class="baz">
     Second
   </li
   >789
@@ -332,9 +323,7 @@ source: markup_fmt/tests/fmt.rs
 />123
 <div
 >
-  123<meta
-    attr
-  />456
+  123<meta attr />456
 </div
 >
 <p
@@ -347,9 +336,7 @@ source: markup_fmt/tests/fmt.rs
 >
 <p
 >
-  x<meta
-    a
-  >
+  x<meta a>
 </p
 >
 <p
@@ -372,9 +359,7 @@ source: markup_fmt/tests/fmt.rs
 >
 <br
 />
-<button
-  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
->
+<button xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx>
   12345678901234567890
 </button
 >
@@ -393,9 +378,7 @@ source: markup_fmt/tests/fmt.rs
 <br
 /><br
 />
-<button
-  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
->
+<button xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx>
   12345678901234567890
 </button
 >
