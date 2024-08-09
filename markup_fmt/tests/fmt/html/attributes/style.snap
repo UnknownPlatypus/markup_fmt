@@ -11,8 +11,7 @@ color:
 <div style=" "></div>
 <div style></div>
 
-<div
-  style="
+<div style="
 
 all: initial;display: block;
 contain: content;text-align: center;
@@ -24,15 +23,12 @@ background: linear-gradient(to left, hsla(240, 100%, 50%, .05), red);
 max-width: 500px;margin: 0 auto;
 border-radius: 8px;transition: transform .2s ease-out;
 
-"
->
+">
 </div>
 
-<div
-  style="
+<div style="
 background: linear-gradient(to left, hotpink, hsla(240, 100%, 50%, .05), transparent);
-"
->
+">
 </div>
 
 <div style="   color : red;
