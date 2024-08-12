@@ -315,8 +315,7 @@ snapshot_kind: text
   x<meta>
 </p
 >
-<span
-></span
+<span></span
 >
 
 <label
@@ -324,8 +323,7 @@ snapshot_kind: text
 ></label
 >
 |
-<span
-></span
+<span></span
 >
 <br />
 <button
@@ -381,32 +379,25 @@ snapshot_kind: text
 </li
 >
 <div>
-  <app-nav
-  ></app-nav
+  <app-nav></app-nav
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
-  <app-footer
-  ></app-footer
+  <app-footer></app-footer
   >
 
   <app-nav
     [input]="something"
   ></app-nav
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
-  <app-footer
-  ></app-footer
+  <app-footer></app-footer
   >
 
-  <app-primary-navigation
-  ></app-primary-navigation
+  <app-primary-navigation></app-primary-navigation
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
   <app-footer
     [input]="something"

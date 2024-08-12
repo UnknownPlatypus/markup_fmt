@@ -468,10 +468,10 @@ impl<'s> DocGen<'s> for Element<'s> {
                     docs.push(Doc::text(" />"));
                     return Doc::list(docs).group();
                 }
-                if is_whitespace_sensitive {
-                    docs.push(Doc::line_or_nil().append(Doc::text(">")).group());
-                } else {
+                if !is_whitespace_sensitive || is_empty {
                     docs.push(Doc::text(">"));
+                } else {
+                    docs.push(Doc::line_or_nil().append(Doc::text(">")).group());
                 }
             }
             [single_attr]
