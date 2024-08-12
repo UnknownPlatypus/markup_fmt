@@ -45,8 +45,7 @@ source: markup_fmt/tests/fmt.rs
   >
 </div
 >
-<textarea
-></textarea
+<textarea></textarea
 >
 
 <div>

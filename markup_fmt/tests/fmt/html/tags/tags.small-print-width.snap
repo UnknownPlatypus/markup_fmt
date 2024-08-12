@@ -299,8 +299,7 @@ source: markup_fmt/tests/fmt.rs
 <p>
   x<meta>
 </p>
-<span
-></span
+<span></span
 >
 
 <label
@@ -308,8 +307,7 @@ source: markup_fmt/tests/fmt.rs
 ></label
 >
 |
-<span
-></span
+<span></span
 >
 <br />
 <button
@@ -357,32 +355,25 @@ source: markup_fmt/tests/fmt.rs
 </li
 >
 <div>
-  <app-nav
-  ></app-nav
+  <app-nav></app-nav
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
-  <app-footer
-  ></app-footer
+  <app-footer></app-footer
   >
 
   <app-nav
     [input]="something"
   ></app-nav
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
-  <app-footer
-  ></app-footer
+  <app-footer></app-footer
   >
 
-  <app-primary-navigation
-  ></app-primary-navigation
+  <app-primary-navigation></app-primary-navigation
   >
-  <router-outlet
-  ></router-outlet
+  <router-outlet></router-outlet
   >
   <app-footer
     [input]="something"
