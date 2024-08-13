@@ -454,6 +454,26 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(Doc::text(formatted_tag_name.clone()));
 
         match self.attrs.as_slice() {
+            [] => {
+                // there're no attributes, so don't insert line break.
+                if self.void_element {
+                    if self_closing {
+                        docs.push(Doc::text(" />"));
+                    } else {
+                        docs.push(Doc::text(">"));
+                    }
+                    return Doc::list(docs).group();
+                }
+                if self_closing && is_empty {
+                    docs.push(Doc::text(" />"));
+                    return Doc::list(docs).group();
+                }
+                if is_whitespace_sensitive {
+                    docs.push(Doc::line_or_nil().append(Doc::text(">")).group());
+                } else {
+                    docs.push(Doc::text(">"));
+                }
+            }
             [single_attr]
                 if ctx.options.prefer_single_line_opening_tag
                     && !is_whitespace_sensitive
@@ -549,21 +569,14 @@ impl<'s> DocGen<'s> for Element<'s> {
                 } else {
                     // for #16
                     if is_whitespace_sensitive
-                        && !self.attrs.is_empty() // there're no attributes, so don't insert line break
-                        && self
-                        .children
-                        .first()
-                        .is_some_and(|child| {
+                        && self.children.first().is_some_and(|child| {
                             if let NodeKind::Text(text_node) = &child.kind {
                                 !text_node.raw.starts_with(|c: char| c.is_ascii_whitespace())
                             } else {
                                 false
                             }
                         })
-                        && self
-                        .children
-                        .last()
-                        .is_some_and(|child| {
+                        && self.children.last().is_some_and(|child| {
                             if let NodeKind::Text(text_node) = &child.kind {
                                 !text_node.raw.ends_with(|c: char| c.is_ascii_whitespace())
                             } else {

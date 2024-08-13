@@ -1,8 +1,7 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<div
->
+<div>
   aaaaaaaaaa
   <a
     href="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
@@ -11,8 +10,7 @@ source: markup_fmt/tests/fmt.rs
   cccccccccc
 </div
 >
-<div
->
+<div>
   aaaaaaaaaa
   <a
     href="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"

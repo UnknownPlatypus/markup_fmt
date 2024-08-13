@@ -2,10 +2,8 @@
 source: markup_fmt/tests/fmt.rs
 snapshot_kind: text
 ---
-<menu
->
-  <li
-  >
+<menu>
+  <li>
     <button
       onclick="copy()"
     >
@@ -14,8 +12,7 @@ snapshot_kind: text
     >
   </li
   >
-  <li
-  >
+  <li>
     <button
       onclick="cut()"
     >
@@ -24,8 +21,7 @@ snapshot_kind: text
     >
   </li
   >
-  <li
-  >
+  <li>
     <button
       onclick="paste()"
     >

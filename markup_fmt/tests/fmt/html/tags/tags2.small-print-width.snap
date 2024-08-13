@@ -1,8 +1,8 @@
 ---
 source: markup_fmt/tests/fmt.rs
+snapshot_kind: text
 ---
-<div
->
+<div>
   before<noscript
   >noscript
     long
@@ -17,12 +17,9 @@ source: markup_fmt/tests/fmt.rs
 </div
 >
 
-<div
->
-  before<details
-  >
-    <summary
-    >
+<div>
+  before<details>
+    <summary>
       summary
       long
       long
@@ -35,8 +32,7 @@ source: markup_fmt/tests/fmt.rs
 </div
 >
 
-<div
->
+<div>
   before<dialog
     open
   >
@@ -54,8 +50,7 @@ source: markup_fmt/tests/fmt.rs
 </div
 >
 
-<div
->
+<div>
   before<object
     data="horse.wav"
   >
@@ -72,8 +67,7 @@ source: markup_fmt/tests/fmt.rs
 </div
 >
 
-<div
->
+<div>
   before<meter
     min="0"
     max="1"
@@ -87,8 +81,7 @@ source: markup_fmt/tests/fmt.rs
 </div
 >
 
-<div
->
+<div>
   before<progress
     value=".5"
     max="1"
