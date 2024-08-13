@@ -5,29 +5,23 @@ snapshot_kind: text
 <select>
   <option>
     Blue
-  </option
-  >
+  </option>
   <option>
     Green
-  </option
-  >
+  </option>
   <optgroup
     label="Darker"
   >
     <option>
       Dark
       Blue
-    </option
-    >
+    </option>
     <option>
       Dark
       Green
-    </option
-    >
-  </optgroup
-  >
-</select
->
+    </option>
+  </optgroup>
+</select>
 <input
   list="colors"
 >
@@ -36,11 +30,8 @@ snapshot_kind: text
 >
   <option>
     Blue
-  </option
-  >
+  </option>
   <option>
     Green
-  </option
-  >
-</datalist
->
+  </option>
+</datalist>

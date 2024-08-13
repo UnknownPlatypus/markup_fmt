@@ -14,8 +14,7 @@ snapshot_kind: text
     long
     long</noscript
   >after
-</div
->
+</div>
 
 <div>
   before<details>
@@ -25,12 +24,9 @@ snapshot_kind: text
       long
       long
       long
-    </summary
-    >details
-  </details
-  >after
-</div
->
+    </summary>details
+  </details>after
+</div>
 
 <div>
   before<dialog
@@ -45,10 +41,8 @@ snapshot_kind: text
     long
     long
     long
-  </dialog
-  >after
-</div
->
+  </dialog>after
+</div>
 
 <div>
   before<object
@@ -62,10 +56,8 @@ snapshot_kind: text
       name="autoplay"
       value="true"
     />
-  </object
-  >after
-</div
->
+  </object>after
+</div>
 
 <div>
   before<meter
@@ -76,17 +68,13 @@ snapshot_kind: text
     optimum=".5"
     value=".2"
   >
-  </meter
-  >after
-</div
->
+  </meter>after
+</div>
 
 <div>
   before<progress
     value=".5"
     max="1"
   >
-  </progress
-  >after
-</div
->
+  </progress>after
+</div>

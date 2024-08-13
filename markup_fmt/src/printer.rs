@@ -453,6 +453,7 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(Doc::text("<"));
         docs.push(Doc::text(formatted_tag_name.clone()));
 
+        let keep_tag_on_single_line = !is_whitespace_sensitive || is_empty;
         match self.attrs.as_slice() {
             [] => {
                 // there're no attributes, so don't insert line break.
@@ -468,7 +469,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                     docs.push(Doc::text(" />"));
                     return Doc::list(docs).group();
                 }
-                if !is_whitespace_sensitive || is_empty {
+                if keep_tag_on_single_line {
                     docs.push(Doc::text(">"));
                 } else {
                     docs.push(Doc::line_or_nil().append(Doc::text(">")).group());
@@ -800,7 +801,11 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(
             Doc::text("</")
                 .append(Doc::text(formatted_tag_name))
-                .append(Doc::line_or_nil())
+                .append(if keep_tag_on_single_line {
+                    Doc::nil()
+                } else {
+                    Doc::line_or_nil()
+                })
                 .append(Doc::text(">"))
                 .group(),
         );
