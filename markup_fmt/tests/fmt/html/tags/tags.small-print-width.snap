@@ -1,14 +1,10 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<br
-/>
-<br
-/>
-<br
-/>
-<br
-/>
+<br />
+<br />
+<br />
+<br />
 <br
   attribute-a
 />
@@ -35,13 +31,11 @@ source: markup_fmt/tests/fmt.rs
   attribute-e="value"
   attribute-f="value"
 />
-<div
->
+<div>
   string
 </div
 >
-<div
->
+<div>
   very
   very
   very
@@ -157,58 +151,45 @@ source: markup_fmt/tests/fmt.rs
   tag.
 </video
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
-  <div
-  >
+  <div>
     string
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
-    <div
-    >
+<div>
+  <div>
+    <div>
       string
     </div
     >
   </div
   >
-  <div
-  >
+  <div>
     string
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
-  <div
-  >
-    <div
-    >
+  <div>
+    <div>
       string
     </div
     >
@@ -216,40 +197,28 @@ source: markup_fmt/tests/fmt.rs
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
   </div
   >
-  <div
-  >
+  <div>
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
-    <div
-    >
-      <div
-      >
-        <div
-        >
-          <div
-          >
-            <div
-            >
+<div>
+  <div>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div>
               string
             </div
             >
@@ -265,41 +234,33 @@ source: markup_fmt/tests/fmt.rs
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
 </div
 >
-<div
->
-  <div
-  >
+<div>
+  <div>
     string
   </div
   >
 
-  <div
-  >
+  <div>
     string
   </div
   >
 </div
 >
-<ul
->
+<ul>
   123<li
     class="foo"
     id="bar"
@@ -320,30 +281,24 @@ source: markup_fmt/tests/fmt.rs
 <img
   src="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
 />123
-<div
->
+<div>
   123<meta attr />456
 </div
 >
-<p
->
+<p>
   x<span
     a="b"
   ></span
   >
 </p
 >
-<p
->
+<p>
   x<meta a>
 </p
 >
-<p
->
-  x<meta
-  >
-</p
->
+<p>
+  x<meta>
+</p>
 <span
 ></span
 >
@@ -356,15 +311,12 @@ source: markup_fmt/tests/fmt.rs
 <span
 ></span
 >
-<br
-/>
+<br />
 <button
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 >12345678901234567890</button
 >
-<br
-/><br
-/>
+<br /><br />
 
 <button
   bind-disabled="isUnchanged"
@@ -372,16 +324,12 @@ source: markup_fmt/tests/fmt.rs
 >Disabled
   Cancel</button
 >
-<br
-/><br
-/>
+<br /><br />
 <button
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 >12345678901234567890</button
 >
-<br
-/><br
-/>
+<br /><br />
 
 <button
   bind-disabled="isUnchanged"
@@ -389,11 +337,8 @@ source: markup_fmt/tests/fmt.rs
 >Disabled
   Cancel</button
 >
-<br
-/><br
-/>
-<p
->
+<br /><br />
+<p>
   "<span
     [innerHTML]="title"
   ></span
@@ -407,13 +352,11 @@ source: markup_fmt/tests/fmt.rs
   title.
 </p
 >
-<li
->
+<li>
   12345678901234567890123456789012345678901234567890123456789012345678901234567890
 </li
 >
-<div
->
+<div>
   <app-nav
   ></app-nav
   >
@@ -460,8 +403,7 @@ source: markup_fmt/tests/fmt.rs
     cased</span
   ></x:root
 >
-<div
->
+<div>
   Lorem
   ipsum
   dolor
@@ -475,8 +417,7 @@ source: markup_fmt/tests/fmt.rs
   >".
 </div
 >
-<div
->
+<div>
   Lorem
   ipsum
   dolor
@@ -505,15 +446,12 @@ source: markup_fmt/tests/fmt.rs
 >
 
 <!-- #5810 -->
-<table
->
-  <tr
-  >
+<table>
+  <tr>
   </tr
   >
 </table
-><div
->
+><div>
   Should
   not
   insert
