@@ -1,24 +1,19 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<ul
->
+<ul>
   <!-- 123
 -->
-  <li
-  >
+  <li>
     First
-  </li
-  >
+  </li>
   <!-- 123
 456
    789
 -->
-  <li
-  >
+  <li>
     Second
-  </li
-  >
+  </li>
   <!--
 
 
@@ -28,11 +23,9 @@ source: markup_fmt/tests/fmt.rs
 
 
 -->
-  <li
-  >
+  <li>
     Second
-  </li
-  >
+  </li>
   <!--
 
 
@@ -42,8 +35,7 @@ source: markup_fmt/tests/fmt.rs
 
 
 -->
-</ul
->
+</ul>
 <span
 ><!--
 --><span

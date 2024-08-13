@@ -455,7 +455,28 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(Doc::text("<"));
         docs.push(Doc::text(formatted_tag_name.clone()));
 
+        let keep_tag_on_single_line = !is_whitespace_sensitive || is_empty;
         match self.attrs.as_slice() {
+            [] => {
+                // there're no attributes, so don't insert line break.
+                if self.void_element {
+                    if self_closing {
+                        docs.push(Doc::text(" />"));
+                    } else {
+                        docs.push(Doc::text(">"));
+                    }
+                    return Doc::list(docs).group();
+                }
+                if self_closing && is_empty {
+                    docs.push(Doc::text(" />"));
+                    return Doc::list(docs).group();
+                }
+                if keep_tag_on_single_line {
+                    docs.push(Doc::text(">"));
+                } else {
+                    docs.push(Doc::line_or_nil().append(Doc::text(">")).group());
+                }
+            }
             [single_attr]
                 if !is_whitespace_sensitive
                     && !matches!(
@@ -550,21 +571,14 @@ impl<'s> DocGen<'s> for Element<'s> {
                 } else {
                     // for #16
                     if is_whitespace_sensitive
-                        && !self.attrs.is_empty() // there're no attributes, so don't insert line break
-                        && self
-                        .children
-                        .first()
-                        .is_some_and(|child| {
+                        && self.children.first().is_some_and(|child| {
                             if let NodeKind::Text(text_node) = &child.kind {
                                 !text_node.raw.starts_with(|c: char| c.is_ascii_whitespace())
                             } else {
                                 false
                             }
                         })
-                        && self
-                        .children
-                        .last()
-                        .is_some_and(|child| {
+                        && self.children.last().is_some_and(|child| {
                             if let NodeKind::Text(text_node) = &child.kind {
                                 !text_node.raw.ends_with(|c: char| c.is_ascii_whitespace())
                             } else {
@@ -788,7 +802,11 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(
             Doc::text("</")
                 .append(Doc::text(formatted_tag_name))
-                .append(Doc::line_or_nil())
+                .append(if keep_tag_on_single_line {
+                    Doc::nil()
+                } else {
+                    Doc::line_or_nil()
+                })
                 .append(Doc::text(">"))
                 .group(),
         );

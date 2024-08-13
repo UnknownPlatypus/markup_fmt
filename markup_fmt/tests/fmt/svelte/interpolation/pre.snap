@@ -1,8 +1,7 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<pre
->
+<pre>
 Hello,
   world!   {JSON.stringify({   foo:'bar'},null,
   2)}Goodbye.
@@ -18,5 +17,4 @@ Hello,
         as is
       </code>
 			this line is intended using tabs which should be preserved
-</pre
->
+</pre>

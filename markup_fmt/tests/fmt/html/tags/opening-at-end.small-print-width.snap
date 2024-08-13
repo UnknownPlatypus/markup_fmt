@@ -1,8 +1,7 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<p
->
+<p>
   Want
   to
   write
@@ -18,11 +17,9 @@ source: markup_fmt/tests/fmt.rs
       ></b
     ></a
   >.
-</p
->
+</p>
 
-<p
->
+<p>
   Want
   to
   write
@@ -39,11 +36,9 @@ source: markup_fmt/tests/fmt.rs
       ></b
     ></a
   >.
-</p
->
+</p>
 
-<p
->
+<p>
   Want
   to
   write
@@ -64,5 +59,4 @@ source: markup_fmt/tests/fmt.rs
       ></b
     ></a
   >.
-</p
->
+</p>

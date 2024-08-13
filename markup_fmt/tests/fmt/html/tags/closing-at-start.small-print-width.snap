@@ -1,22 +1,18 @@
 ---
 source: markup_fmt/tests/fmt.rs
 ---
-<div
->
+<div>
   aaaaaaaaaa
   <a
     href="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
   >bbbbbbbbbb</a
   >
   cccccccccc
-</div
->
-<div
->
+</div>
+<div>
   aaaaaaaaaa
   <a
     href="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
   >bbbbbbbbbb</a
   >cccccccccc
-</div
->
+</div>
