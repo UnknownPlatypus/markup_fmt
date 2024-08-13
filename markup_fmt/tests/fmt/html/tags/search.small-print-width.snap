@@ -15,10 +15,8 @@ source: markup_fmt/tests/fmt.rs
     >
     <title>
       Document
-    </title
-    >
-  </head
-  >
+    </title>
+  </head>
   <body>
     <header>
       <h1>
@@ -28,8 +26,7 @@ source: markup_fmt/tests/fmt.rs
           fancy
           blog</a
         >
-      </h1
-      >
+      </h1>
       ...
       <search>
         <form action="search.php">
@@ -48,17 +45,11 @@ source: markup_fmt/tests/fmt.rs
             type="submit"
           >Go!</button
           >
-        </form
-        >
-      </search
-      >
+        </form>
+      </search>
 
       <search>
-      </search
-      >
-    </header
-    >
-  </body
-  >
-</html
->
+      </search>
+    </header>
+  </body>
+</html>

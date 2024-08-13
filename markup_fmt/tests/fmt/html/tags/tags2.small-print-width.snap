@@ -13,8 +13,7 @@ source: markup_fmt/tests/fmt.rs
     long
     long</noscript
   >after
-</div
->
+</div>
 
 <div>
   before<details>
@@ -24,12 +23,9 @@ source: markup_fmt/tests/fmt.rs
       long
       long
       long
-    </summary
-    >details
-  </details
-  >after
-</div
->
+    </summary>details
+  </details>after
+</div>
 
 <div>
   before<dialog open>
@@ -42,10 +38,8 @@ source: markup_fmt/tests/fmt.rs
     long
     long
     long
-  </dialog
-  >after
-</div
->
+  </dialog>after
+</div>
 
 <div>
   before<object data="horse.wav">
@@ -57,10 +51,8 @@ source: markup_fmt/tests/fmt.rs
       name="autoplay"
       value="true"
     />
-  </object
-  >after
-</div
->
+  </object>after
+</div>
 
 <div>
   before<meter
@@ -70,16 +62,12 @@ source: markup_fmt/tests/fmt.rs
     high=".7"
     optimum=".5"
     value=".2"
-  ></meter
-  >after
-</div
->
+  ></meter>after
+</div>
 
 <div>
   before<progress
     value=".5"
     max="1"
-  ></progress
-  >after
-</div
->
+  ></progress>after
+</div>

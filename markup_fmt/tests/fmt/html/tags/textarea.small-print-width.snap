@@ -21,36 +21,22 @@ source: markup_fmt/tests/fmt.rs
                         String
                         </textarea
                         >
-                      </div
-                      >
-                    </div
-                    >
-                  </div
-                  >
-                </div
-                >
-              </div
-              >
-            </div
-            >
-          </div
-          >
-        </div
-        >
-      </div
-      >
-    </div
-    >
-  </div
-  >
-</div
->
-<textarea></textarea
->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<textarea></textarea>
 
 <div>
   <textarea
   >lorem ipsum</textarea
   >
-</div
->
+</div>
