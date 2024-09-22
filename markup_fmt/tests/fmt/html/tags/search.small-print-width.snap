@@ -3,10 +3,14 @@ source: markup_fmt/tests/fmt.rs
 snapshot_kind: text
 ---
 <!DOCTYPE html>
-<html lang="en">
+<html
+  lang="en"
+>
   <head
   >
-    <meta charset="UTF-8">
+    <meta
+      charset="UTF-8"
+    >
     <meta
       http-equiv="X-UA-Compatible"
       content="IE=edge"
@@ -39,7 +43,9 @@ snapshot_kind: text
       ...
       <search
       >
-        <form action="search.php">
+        <form
+          action="search.php"
+        >
           <label
             for="query"
           >Find
@@ -51,7 +57,9 @@ snapshot_kind: text
             name="q"
             type="search"
           >
-          <button type="submit">
+          <button
+            type="submit"
+          >
             Go!
           </button
           >

@@ -6,7 +6,9 @@ snapshot_kind: text
   <div v-if="(label = 'a')"></div>
   <div v-if="(label = 'a')"></div>
 
-  <button @click="(content += '{&quot;hello&quot;: &quot;I\'m a button!&quot;}')">
+  <button
+    @click="(content += '{&quot;hello&quot;: &quot;I\'m a button!&quot;}')"
+  >
   </button>
 
   <input :value="''">

@@ -459,7 +459,9 @@ impl<'s> DocGen<'s> for Element<'s> {
                     && !is_whitespace_sensitive
                     && !matches!(
                         single_attr,
-                        Attribute::JinjaTagOrBlock(..) | Attribute::VentoTagOrBlock(..)
+                        Attribute::JinjaTag(..)
+                            | Attribute::JinjaBlock(..)
+                            | Attribute::VentoTagOrBlock(..)
                     ) =>
             {
                 // Avoid breaking on multiple lines for a single attribute in non whitespace sensitive context.
@@ -522,7 +524,6 @@ impl<'s> DocGen<'s> for Element<'s> {
                     )
                     .nest(ctx.indent_width)
                 };
-            
 
                 if self.void_element {
                     docs.push(attrs);
