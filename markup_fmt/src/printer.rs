@@ -919,7 +919,40 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             docs.push(name);
             docs.push(Doc::text("="));
             docs.push(quote.clone());
-            if self.name.eq_ignore_ascii_case("class") {
+            if self.name.eq_ignore_ascii_case("class")
+                || self.name.eq_ignore_ascii_case("aria-labelledby")
+                || self.name.eq_ignore_ascii_case("aria-describedby")
+                || self.name.eq_ignore_ascii_case("aria-controls")
+                || self.name.eq_ignore_ascii_case("aria-owns")
+                || self.name.eq_ignore_ascii_case("rel")
+                    && state
+                        .current_tag_name
+                        .map(|name| {
+                            ["form", "a", "area", "link"]
+                                .iter()
+                                .any(|tag| tag.eq_ignore_ascii_case(name))
+                        })
+                        .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("autocomplete")
+                    && state
+                        .current_tag_name
+                        .map(|name| {
+                            ["form", "input", "select", "textarea"]
+                                .iter()
+                                .any(|tag| tag.eq_ignore_ascii_case(name))
+                        })
+                        .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("sandbox")
+                    && state
+                        .current_tag_name
+                        .map(|name| name.eq_ignore_ascii_case("iframe"))
+                        .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("accept-charset")
+                    && state
+                        .current_tag_name
+                        .map(|name| name.eq_ignore_ascii_case("form"))
+                        .unwrap_or_default()
+            {
                 docs.push(Doc::text(value.split_ascii_whitespace().join(" ")));
             } else if self.name.eq_ignore_ascii_case("style") {
                 docs.push(Doc::text(ctx.format_style_attr(&value, value_start)));
