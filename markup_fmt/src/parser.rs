@@ -23,12 +23,14 @@ pub enum Language {
     Astro,
     Angular,
     Jinja,
+    Django,
     Vento,
 }
 
 pub struct Parser<'s> {
     source: &'s str,
     language: Language,
+    custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     state: ParserState,
 }
@@ -39,10 +41,11 @@ struct ParserState {
 }
 
 impl<'s> Parser<'s> {
-    pub fn new(source: &'s str, language: Language) -> Self {
+    pub fn new(source: &'s str, language: Language, custom_blocks: Vec<String>) -> Self {
         Self {
             source,
             language,
+            custom_blocks,
             chars: source.char_indices().peekable(),
             state: Default::default(),
         }
@@ -693,7 +696,7 @@ impl<'s> Parser<'s> {
                 .try_parse(Parser::parse_astro_attr)
                 .map(Attribute::Astro)
                 .or_else(|_| self.parse_native_attr().map(Attribute::Native)),
-            Language::Jinja => {
+            Language::Jinja | Language::Django => {
                 self.skip_ws();
                 let result = if matches!(self.chars.peek(), Some((_, '{'))) {
                     let mut chars = self.chars.clone();
@@ -787,7 +790,10 @@ impl<'s> Parser<'s> {
         let quote = self.chars.next_if(|(_, c)| *c == '"' || *c == '\'');
 
         if let Some((start, quote)) = quote {
-            let is_jinja_or_vento = matches!(self.language, Language::Jinja | Language::Vento);
+            let is_jinja_or_vento = matches!(
+                self.language,
+                Language::Jinja | Language::Django | Language::Vento
+            );
             let start = start + 1;
             let mut end = start;
             let mut chars_stack = vec![];
@@ -831,7 +837,10 @@ impl<'s> Parser<'s> {
             loop {
                 match self.chars.peek() {
                     Some((i, '{'))
-                        if matches!(self.language, Language::Jinja | Language::Vento) =>
+                        if matches!(
+                            self.language,
+                            Language::Jinja | Language::Django | Language::Vento
+                        ) =>
                     {
                         end = *i;
                         let mut chars = self.chars.clone();
@@ -1209,7 +1218,7 @@ impl<'s> Parser<'s> {
         Ok(children)
     }
 
-    fn parse_jinja_comment(&mut self) -> PResult<JinjaComment<'s>> {
+    fn parse_jinja_comment(&mut self) -> PResult<JinjaOrDjangoComment<'s>> {
         let Some((start, _)) = self
             .chars
             .next_if(|(_, c)| *c == '{')
@@ -1235,7 +1244,7 @@ impl<'s> Parser<'s> {
             }
         }
 
-        Ok(JinjaComment {
+        Ok(JinjaOrDjangoComment {
             raw: unsafe { self.source.get_unchecked(start..end) },
         })
     }
@@ -1285,22 +1294,48 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if matches!(
-            tag_name,
-            "for"
-                | "if"
-                | "macro"
-                | "call"
-                | "filter"
-                | "block"
-                | "apply"
-                | "autoescape"
-                | "embed"
-                | "with"
-                | "set"
-                | "trans"
-                | "raw"
-        ) {
+        if matches!(self.language, Language::Jinja)
+            && matches!(
+                tag_name,
+                "for"
+                    | "if"
+                    | "macro"
+                    | "call"
+                    | "filter"
+                    | "block"
+                    | "apply"
+                    | "autoescape"
+                    | "embed"
+                    | "with"
+                    | "set"
+                    | "trans"
+                    | "raw"
+            )
+            || (matches!(self.language, Language::Django)
+                && matches!(
+                    tag_name,
+                    "autoescape"
+                        | "block"
+                        | "blocktrans"
+                        | "blocktranslate"
+                        | "cache"
+                        | "comment"
+                        | "filter"
+                        | "for"
+                        | "if"
+                        | "ifchanged"
+                        | "language"
+                        | "localize"
+                        | "localtime"
+                        | "spaceless"
+                        | "tag"
+                        | "timezone"
+                        | "upper"
+                        | "verbatim"
+                        | "with"
+                )
+                || self.custom_blocks.iter().any(|s| s == tag_name))
+        {
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
 
             loop {
@@ -1417,7 +1452,11 @@ impl<'s> Parser<'s> {
                     Some((_, '!')) => {
                         if matches!(
                             self.language,
-                            Language::Html | Language::Astro | Language::Jinja | Language::Vento
+                            Language::Html
+                                | Language::Astro
+                                | Language::Jinja
+                                | Language::Django
+                                | Language::Vento
                         ) {
                             self.try_parse(Parser::parse_comment)
                                 .map(NodeKind::Comment)
@@ -1442,7 +1481,7 @@ impl<'s> Parser<'s> {
                     Some((_, '{'))
                         if matches!(
                             self.language,
-                            Language::Vue | Language::Jinja | Language::Angular
+                            Language::Vue | Language::Jinja | Language::Django | Language::Angular
                         ) =>
                     {
                         self.parse_mustache_interpolation().map(|(expr, start)| {
@@ -1450,8 +1489,8 @@ impl<'s> Parser<'s> {
                                 Language::Vue => {
                                     NodeKind::VueInterpolation(VueInterpolation { expr, start })
                                 }
-                                Language::Jinja => {
-                                    NodeKind::JinjaInterpolation(JinjaInterpolation { expr })
+                                Language::Jinja | Language::Django => {
+                                    NodeKind::JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation { expr })
                                 }
                                 Language::Angular => {
                                     NodeKind::AngularInterpolation(AngularInterpolation {
@@ -1483,11 +1522,11 @@ impl<'s> Parser<'s> {
                             _ => self.parse_text_node().map(NodeKind::Text),
                         }
                     }
-                    Some((_, '#')) if matches!(self.language, Language::Jinja) => {
-                        self.parse_jinja_comment().map(NodeKind::JinjaComment)
+                    Some((_, '#')) if matches!(self.language, Language::Jinja| Language::Django) => {
+                        self.parse_jinja_comment().map(NodeKind::JinjaOrDjangoComment)
                     }
                     Some((_, '@')) => self.parse_svelte_at_tag().map(NodeKind::SvelteAtTag),
-                    Some((_, '%')) if matches!(self.language, Language::Jinja) => {
+                    Some((_, '%')) if matches!(self.language, Language::Jinja | Language::Django) => {
                         self.parse_jinja_tag_or_block(None, &mut Parser::parse_node)
                     }
                     _ => match self.language {
@@ -2209,7 +2248,7 @@ impl<'s> Parser<'s> {
                         end = *i;
                         break;
                     }
-                    Language::Jinja => {
+                    Language::Jinja | Language::Django => {
                         let i = *i;
                         let mut chars = self.chars.clone();
                         chars.next();
