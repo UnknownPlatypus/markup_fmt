@@ -896,25 +896,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 }
                 _ => Cow::from(value),
             };
-            let has_single = value.contains('\'');
-            let has_double = value.contains('"');
-            let quote = if has_double && has_single {
-                if let Some(quote) = self.quote {
-                    Doc::text(quote.to_string())
-                } else if let Quotes::Double = ctx.options.quotes {
-                    Doc::text("\"")
-                } else {
-                    Doc::text("'")
-                }
-            } else if has_double {
-                Doc::text("'")
-            } else if has_single {
-                Doc::text("\"")
-            } else if let Quotes::Double = ctx.options.quotes {
-                Doc::text("\"")
-            } else {
-                Doc::text("'")
-            };
+            let quote = compute_attr_value_quote(self.quote, ctx, &value);
             let mut docs = Vec::with_capacity(5);
             docs.push(name);
             docs.push(Doc::text("="));
@@ -2196,4 +2178,36 @@ where
         .concat(reflow_with_indent(
             &ctx.format_stmt_header(fake_keyword, code),
         ))
+}
+
+fn compute_attr_value_quote<'s, E, F>(
+    initial_quote: Option<char>,
+    ctx: &mut Ctx<'s, E, F>,
+    value: &Cow<str>,
+) -> Doc<'s>
+where
+    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+{
+    let has_single = value.contains('\'');
+    let has_double = value.contains('"');
+    let quote = if has_double && has_single
+        || matches!(ctx.language, Language::Jinja) & (has_double || has_single)
+    {
+        if let Some(quote) = initial_quote {
+            Doc::text(quote.to_string())
+        } else if let Quotes::Double = ctx.options.quotes {
+            Doc::text("\"")
+        } else {
+            Doc::text("'")
+        }
+    } else if has_double {
+        Doc::text("'")
+    } else if has_single {
+        Doc::text("\"")
+    } else if let Quotes::Double = ctx.options.quotes {
+        Doc::text("\"")
+    } else {
+        Doc::text("'")
+    };
+    quote
 }
