@@ -984,6 +984,15 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                                 .any(|tag| tag.eq_ignore_ascii_case(name))
                         })
                         .unwrap_or_default()
+                || self.name.eq_ignore_ascii_case("autocomplete")
+                    && state
+                        .current_tag_name
+                        .map(|name| {
+                            ["form", "input", "select", "textarea"]
+                                .iter()
+                                .any(|tag| tag.eq_ignore_ascii_case(name))
+                        })
+                        .unwrap_or_default()
             {
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
