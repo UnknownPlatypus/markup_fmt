@@ -1,3 +1,4 @@
+use crate::helpers::should_be_space_separated;
 use crate::{
     ast::*,
     config::{Quotes, ScriptFormatter, VSlotStyle, WhitespaceSensitivity},
@@ -974,40 +975,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             docs.push(name);
             docs.push(Doc::text("="));
             docs.push(quote.clone());
-            if self.name.eq_ignore_ascii_case("class")
-                || self.name.eq_ignore_ascii_case("aria-labelledby")
-                || self.name.eq_ignore_ascii_case("aria-describedby")
-                || self.name.eq_ignore_ascii_case("aria-controls")
-                || self.name.eq_ignore_ascii_case("aria-owns")
-                || self.name.eq_ignore_ascii_case("rel")
-                    && state
-                        .current_tag_name
-                        .map(|name| {
-                            ["form", "a", "area", "link"]
-                                .iter()
-                                .any(|tag| tag.eq_ignore_ascii_case(name))
-                        })
-                        .unwrap_or_default()
-                || self.name.eq_ignore_ascii_case("autocomplete")
-                    && state
-                        .current_tag_name
-                        .map(|name| {
-                            ["form", "input", "select", "textarea"]
-                                .iter()
-                                .any(|tag| tag.eq_ignore_ascii_case(name))
-                        })
-                        .unwrap_or_default()
-                || self.name.eq_ignore_ascii_case("sandbox")
-                    && state
-                        .current_tag_name
-                        .map(|name| name.eq_ignore_ascii_case("iframe"))
-                        .unwrap_or_default()
-                || self.name.eq_ignore_ascii_case("accept-charset")
-                    && state
-                        .current_tag_name
-                        .map(|name| name.eq_ignore_ascii_case("form"))
-                        .unwrap_or_default()
-            {
+            if should_be_space_separated(self.name, state) {
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
                     Doc::hard_line()
