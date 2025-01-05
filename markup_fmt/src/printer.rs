@@ -974,7 +974,17 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             docs.push(name);
             docs.push(Doc::text("="));
             docs.push(quote.clone());
-            if self.name.eq_ignore_ascii_case("class") {
+            if self.name.eq_ignore_ascii_case("class")
+                || self.name.eq_ignore_ascii_case("rel")
+                    && state
+                        .current_tag_name
+                        .map(|name| {
+                            ["form", "a", "area", "link"]
+                                .iter()
+                                .any(|tag| tag.eq_ignore_ascii_case(name))
+                        })
+                        .unwrap_or_default()
+            {
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
                     Doc::hard_line()
