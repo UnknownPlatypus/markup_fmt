@@ -9,6 +9,34 @@ use crate::{
 use itertools::Itertools;
 use std::borrow::Cow;
 use tiny_pretty::Doc;
+use std::ops::Deref;
+use std::path::Path;
+use tiny_pretty::print;
+
+fn debug_print(docs: Vec<Doc>, ident: usize) {
+    for doc in docs {
+        match doc {
+            Doc::Group(docs) => {
+                println!("{}{ident}---Group", "|   ".repeat(ident));
+                debug_print(docs, ident + 1)
+            }
+            Doc::List(docs) => {
+                println!("{}{ident}---List", "|   ".repeat(ident));
+                debug_print(docs, ident + 1)
+            }
+            Doc::Nest(nest_ident, doc) => {
+                println!("{}{ident}---Nest({nest_ident})", "|   ".repeat(ident));
+                debug_print(vec![doc.deref().to_owned()], ident + 1)
+            }
+            Doc::Alt(flat_doc, break_doc) => {
+                println!("{}{ident}---Alt", "|   ".repeat(ident));
+                debug_print(vec![flat_doc.deref().to_owned()], ident + 1);
+                debug_print(vec![break_doc.deref().to_owned()], ident + 1)
+            }
+            _ => println!("{}{ident}---{:?}", "|   ".repeat(ident), doc),
+        }
+    }
+}
 
 pub(super) trait DocGen<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
@@ -660,23 +688,27 @@ impl<'s> DocGen<'s> for Element<'s> {
                 };
             }
         } else if !is_whitespace_sensitive && has_two_more_non_text_children {
+            // println!("with_inserting_linebreak -> trailing_ws={trailing_ws:?}, leading_ws={leading_ws:?}, has_two_more_non_text_children={has_two_more_non_text_children}");
             docs.push(leading_ws.nest_with_ctx(ctx));
             docs.push(
                 format_children_with_inserting_linebreak(&self.children, ctx, &state)
                     .nest_with_ctx(ctx),
             );
+            // debug_print(vec![docs.last().unwrap().clone()], 0);
             docs.push(trailing_ws);
         } else if is_whitespace_sensitive
             && matches!(&self.children[..], [Node { kind: NodeKind::Text(text_node), .. }] if is_all_ascii_whitespace(text_node.raw))
         {
             docs.push(Doc::line_or_space());
         } else {
+            // println!("without_inserting_linebreak -> trailing_ws={trailing_ws:?}, leading_ws={leading_ws:?}, has_two_more_non_text_children={has_two_more_non_text_children}");
             let children_doc = leading_ws.append(format_children_without_inserting_linebreak(
                 &self.children,
                 has_two_more_non_text_children,
                 ctx,
                 &state,
             ));
+            // debug_print(vec![children_doc.clone()], 0);
             if is_whitespace_sensitive
                 && self.children.iter().all(|child| {
                     matches!(
@@ -715,7 +747,9 @@ impl<'s> DocGen<'s> for Element<'s> {
                 .group(),
         );
 
-        Doc::list(docs).group()
+        let res = Doc::list(docs).group();
+        // debug_print(vec![res.clone()], 0);
+        res
     }
 }
 
