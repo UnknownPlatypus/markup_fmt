@@ -1,3 +1,4 @@
+use crate::helpers::should_be_space_separated;
 use crate::{
     ast::*,
     config::{Quotes, ScriptFormatter, VSlotStyle, WhitespaceSensitivity},
@@ -976,7 +977,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             docs.push(name);
             docs.push(Doc::text("="));
             docs.push(quote.clone());
-            if self.name.eq_ignore_ascii_case("class") {
+            if should_be_space_separated(self.name, state) {
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
                     Doc::hard_line()
