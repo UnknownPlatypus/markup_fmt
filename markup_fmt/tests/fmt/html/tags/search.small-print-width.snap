@@ -22,24 +22,17 @@ snapshot_kind: text
     <title
     >
       Document
-    </title
-    >
-  </head
-  >
-  <body
-  >
-    <header
-    >
-      <h1
-      >
+    </title>
+  </head>
+  <body>
+    <header>
+      <h1>
         <a
           href="/"
         >My
           fancy
-          blog</a
-        >
-      </h1
-      >
+          blog</a>
+      </h1>
       ...
       <search
       >
@@ -50,8 +43,7 @@ snapshot_kind: text
             for="query"
           >Find
             an
-            article</label
-          >
+            article</label>
           <input
             id="query"
             name="q"
@@ -59,22 +51,12 @@ snapshot_kind: text
           >
           <button
             type="submit"
-          >
-            Go!
-          </button
-          >
-        </form
-        >
-      </search
-      >
+          >Go!</button>
+        </form>
+      </search>
 
-      <search
-      >
-      </search
-      >
-    </header
-    >
-  </body
-  >
-</html
->
+      <search>
+      </search>
+    </header>
+  </body>
+</html>

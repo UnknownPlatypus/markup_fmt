@@ -8,31 +8,16 @@ snapshot_kind: text
   >
     <button
       onclick="copy()"
-    >
-      Copy
-    </button
-    >
-  </li
-  >
-  <li
-  >
+    >Copy</button>
+  </li>
+  <li>
     <button
       onclick="cut()"
-    >
-      Cut
-    </button
-    >
-  </li
-  >
-  <li
-  >
+    >Cut</button>
+  </li>
+  <li>
     <button
       onclick="paste()"
-    >
-      Paste
-    </button
-    >
-  </li
-  >
-</menu
->
+    >Paste</button>
+  </li>
+</menu>

@@ -787,7 +787,7 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(
             Doc::text("</")
                 .append(Doc::text(formatted_tag_name))
-                .append(Doc::line_or_nil())
+                // .append(Doc::line_or_nil())
                 .append(Doc::text(">"))
                 .group(),
         );

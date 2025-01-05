@@ -11,58 +11,35 @@ source: markup_fmt/tests/fmt.rs
     <!--[if IE 7]>This is IE 7<br><![endif]-->
     <!--[if IE 8]>This is IE 8<br><![endif]-->
     <!--[if IE 9]>This is IE 9<br><![endif]-->
-  </body
-  >
-</html
->
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html lang="zh-CN"><![endif]-->
-<html
-  lang="zh-CN"
->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+<html lang="zh-CN">
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html lang="zh-CN"><div><![endif]-->
-<html
-  lang="zh-CN"
->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+<html lang="zh-CN">
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html lang="zh-CN"><div></div><![endif]-->
-<html
-  lang="zh-CN"
->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+<html lang="zh-CN">
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
 
 <body
   width="100%"
@@ -71,15 +48,11 @@ source: markup_fmt/tests/fmt.rs
   <center
   >
     <!--[if (gte mso 9)|(IE)]><table cellpadding="0" cellspacing="0" border="0" width="600" align="center"><tr><td><![endif]-->
-    <div
-    >
-    </div
-    >
+    <div>
+    </div>
     <!--[if (gte mso 9)|(IE)]></td></tr></table><![endif]-->
-  </center
-  >
-</body
->
+  </center>
+</body>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html class="legacy-ie"><![endif]-->
@@ -87,16 +60,11 @@ source: markup_fmt/tests/fmt.rs
 <html
 >
   <!--<![endif]-->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html class="legacy-ie"><![endif]-->
@@ -105,16 +73,11 @@ source: markup_fmt/tests/fmt.rs
   hello
 >
   <!--<![endif]-->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+  <head>
+  </head>
+  <body>
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html class="legacy-ie"><head><![endif]-->
@@ -124,14 +87,10 @@ source: markup_fmt/tests/fmt.rs
   <head
   >
     <!--<![endif]-->
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+  </head>
+  <body>
+  </body>
+</html>
 
 <!DOCTYPE html>
 <!--[if lt IE 9]><html class="legacy-ie"><![endif]-->
@@ -140,13 +99,8 @@ source: markup_fmt/tests/fmt.rs
 <html
 >
   <!--<![endif]-->
-  <head
-  >
-  </head
-  >
-  <body
-  >
-  </body
-  >
-</html
->
+  <head>
+  </head>
+  <body>
+  </body>
+</html>

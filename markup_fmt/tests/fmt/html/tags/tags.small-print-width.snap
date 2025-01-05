@@ -39,10 +39,8 @@ snapshot_kind: text
 <div
 >
   string
-</div
->
-<div
->
+</div>
+<div>
   very
   very
   very
@@ -61,29 +59,17 @@ snapshot_kind: text
   very
   long
   string
-</div
->
-<div
-  very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute
->
+</div>
+<div very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute>
   string
-</div
->
-<div
-  very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute="value"
->
+</div>
+<div very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-attribute="value">
   string
-</div
->
-<div
-  attribute="very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-value"
->
+</div>
+<div attribute="very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-very-long-value">
   string
-</div
->
-<div
-  attribute="value"
->
+</div>
+<div attribute="value">
   very
   very
   very
@@ -102,8 +88,7 @@ snapshot_kind: text
   very
   long
   string
-</div
->
+</div>
 <div
   attribute="value"
   attributea="value"
@@ -113,8 +98,7 @@ snapshot_kind: text
   attributef="value"
 >
   string
-</div
->
+</div>
 <div
   attribute="value"
   attributea="value"
@@ -141,8 +125,7 @@ snapshot_kind: text
   very
   long
   string
-</div
->
+</div>
 <video
   width="320"
   height="240"
@@ -164,312 +147,186 @@ snapshot_kind: text
   the
   video
   tag.
-</video
->
-<div
->
-  <div
-  >
+</video>
+<div>
+  <div>
     string
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
+  </div>
+</div>
+<div>
+  <div>
     string
-  </div
-  >
-  <div
-  >
+  </div>
+  <div>
     string
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
-    <div
-    >
+  </div>
+</div>
+<div>
+  <div>
+    <div>
       string
-    </div
-    >
-  </div
-  >
-  <div
-  >
+    </div>
+  </div>
+  <div>
     string
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
+  </div>
+</div>
+<div>
+  <div>
     string
-  </div
-  >
-  <div
-  >
-    <div
-    >
+  </div>
+  <div>
+    <div>
       string
-    </div
-    >
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
-  </div
-  >
-  <div
-  >
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
-    <div
-    >
-      <div
-      >
-        <div
-        >
-          <div
-          >
-            <div
-            >
+    </div>
+  </div>
+</div>
+<div>
+  <div>
+  </div>
+</div>
+<div>
+  <div>
+  </div>
+  <div>
+  </div>
+</div>
+<div>
+  <div>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div>
               string
-            </div
-            >
-          </div
-          >
-        </div
-        >
-      </div
-      >
-    </div
-    >
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div>
+  <div>
     string
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
+  </div>
+</div>
+<div>
+  <div>
     string
-  </div
-  >
-</div
->
-<div
->
-  <div
-  >
+  </div>
+</div>
+<div>
+  <div>
     string
-  </div
-  >
+  </div>
 
   <div
   >
     string
-  </div
-  >
-</div
->
-<ul
->
+  </div>
+</div>
+<ul>
   123<li
     class="foo"
     id="bar"
   >
     First
-  </li
-  >456<li
-    class="baz"
-  >
+  </li>456<li class="baz">
     Second
-  </li
-  >789
-</ul
->
+  </li>789
+</ul>
 <span
 >*<b
-  >200</b
-  ></span
->
+  >200</b></span>
 <img
   src="longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
 />123
-<div
->
-  123<meta
-    attr
-  />456
-</div
->
-<p
->
+<div>
+  123<meta attr />456
+</div>
+<p>
   x<span
     a="b"
-  ></span
-  >
-</p
->
-<p
->
-  x<meta
-    a
-  >
-</p
->
-<p
->
+  ></span>
+</p>
+<p>
+  x<meta a>
+</p>
+<p>
   x<meta
   >
-</p
->
+</p>
 <span
-></span
->
+></span>
 
 <label
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-></label
->
+></label>
 |
 <span
-></span
->
-<br
-/>
+></span>
+<br />
 <button
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
->
-  12345678901234567890
-</button
->
-<br
-/><br
-/>
+>12345678901234567890</button>
+<br /><br />
 
 <button
   bind-disabled="isUnchanged"
   on-click="onSave($event)"
->
-  Disabled
-  Cancel
-</button
->
-<br
-/><br
-/>
+>Disabled
+  Cancel</button>
+<br /><br />
 <button
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
->
-  12345678901234567890
-</button
->
-<br
-/><br
-/>
+>12345678901234567890</button>
+<br /><br />
 
 <button
   bind-disabled="isUnchanged"
   on-click="onSave($event)"
->
-  Disabled
-  Cancel
-</button
->
-<br
-/><br
-/>
-<p
->
+>Disabled
+  Cancel</button>
+<br /><br />
+<p>
   "<span
     [innerHTML]="title"
-  ></span
-  >"
+  ></span>"
   is
   the
   <i
   >property
-    bound</i
-  >
+    bound</i>
   title.
-</p
->
-<li
->
+</p>
+<li>
   12345678901234567890123456789012345678901234567890123456789012345678901234567890
-</li
->
-<div
->
+</li>
+<div>
   <app-nav
-  ></app-nav
-  >
+  ></app-nav>
   <router-outlet
-  ></router-outlet
-  >
+  ></router-outlet>
   <app-footer
-  ></app-footer
-  >
+  ></app-footer>
 
   <app-nav
     [input]="something"
-  ></app-nav
-  >
+  ></app-nav>
   <router-outlet
-  ></router-outlet
-  >
+  ></router-outlet>
   <app-footer
-  ></app-footer
-  >
+  ></app-footer>
 
   <app-primary-navigation
-  ></app-primary-navigation
-  >
+  ></app-primary-navigation>
   <router-outlet
-  ></router-outlet
-  >
+  ></router-outlet>
   <app-footer
     [input]="something"
-  ></app-footer
-  >
-</div
->
+  ></app-footer>
+</div>
 <x:root
 ><span
   >tag
@@ -480,11 +337,8 @@ snapshot_kind: text
     should
     also
     lower
-    cased</span
-  ></x:root
->
-<div
->
+    cased</span></x:root>
+<div>
   Lorem
   ipsum
   dolor
@@ -494,12 +348,9 @@ snapshot_kind: text
   adipiscing
   elit,
   "<strong
-  >seddoeiusmod</strong
-  >".
-</div
->
-<div
->
+  >seddoeiusmod</strong>".
+</div>
+<div>
   Lorem
   ipsum
   dolor
@@ -509,10 +360,8 @@ snapshot_kind: text
   adipiscing
   elit,
   <strong
-  >seddoeiusmod</strong
-  >.
-</div
->
+  >seddoeiusmod</strong>.
+</div>
 <span
 >
   <i
@@ -524,19 +373,13 @@ snapshot_kind: text
   <i
     class="fa fa-refresh fa-spin"
   />
-</span
->
+</span>
 
 <!-- #5810 -->
-<table
->
-  <tr
-  >
-  </tr
-  >
-</table
-><div
->
+<table>
+  <tr>
+  </tr>
+</table><div>
   Should
   not
   insert
@@ -545,25 +388,20 @@ snapshot_kind: text
   before
   this
   div
-</div
->
+</div>
 
 <!-- self-closing -->
 <span
 ><input
     type="checkbox"
   />
-</span
->
+</span>
 <span
 ><span
   ><input
       type="checkbox"
-    /></span
-  ></span
->
+    /></span></span>
 <span
 ><input
     type="checkbox"
-  /></span
->
+  /></span>

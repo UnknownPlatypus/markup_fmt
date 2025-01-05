@@ -6,32 +6,21 @@ source: markup_fmt/tests/fmt.rs
   <option
   >
     Blue
-  </option
-  >
-  <option
-  >
+  </option>
+  <option>
     Green
-  </option
-  >
-  <optgroup
-    label="Darker"
-  >
-    <option
-    >
+  </option>
+  <optgroup label="Darker">
+    <option>
       Dark
       Blue
-    </option
-    >
-    <option
-    >
+    </option>
+    <option>
       Dark
       Green
-    </option
-    >
-  </optgroup
-  >
-</select
->
+    </option>
+  </optgroup>
+</select>
 <input
   list="colors"
 >
@@ -41,12 +30,8 @@ source: markup_fmt/tests/fmt.rs
   <option
   >
     Blue
-  </option
-  >
-  <option
-  >
+  </option>
+  <option>
     Green
-  </option
-  >
-</datalist
->
+  </option>
+</datalist>

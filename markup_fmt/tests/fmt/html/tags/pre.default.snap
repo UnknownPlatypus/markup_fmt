@@ -25,10 +25,8 @@ source: markup_fmt/tests/fmt.rs
  **
 
 --------------------------------------------------------------------------------
-</pre
->
-<pre
->
+</pre>
+<pre>
 
         Text in a pre element
 
@@ -40,8 +38,7 @@ source: markup_fmt/tests/fmt.rs
 
    line breaks
 
-</pre
->
+</pre>
 <pre>     Foo     Bar     </pre>
 <pre>
      Foo     Bar
@@ -63,8 +60,7 @@ ___________________________
              ||----w |
              ||     ||
 ___________________________
-  </pre
-  >
+  </pre>
   <figcaption id="cow-caption">
     A cow saying, "I'm an expert in my field." The cow is illustrated using
     preformatted text characters.
@@ -118,12 +114,8 @@ ___________________________
 <pre><HR /></pre>
 <pre><span></span></pre>
 <pre><DIV></DIV></pre>
-<pre
-><br/>long long long text long long long text long long long text long long long text <br></pre
->
-<pre
-><br>long long long text long long long text long long long text long long long text <BR/></pre
->
+<pre><br/>long long long text long long long text long long long text long long long text <br></pre>
+<pre><br>long long long text long long long text long long long text long long long text <BR/></pre>
 
 <pre><a></pre>
 <pre></b></pre>
