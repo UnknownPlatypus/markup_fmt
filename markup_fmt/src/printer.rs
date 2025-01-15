@@ -281,7 +281,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                         .append(Doc::line_or_nil())
                         .append(format_children_without_inserting_linebreak(
                             nodes,
-                            has_two_more_non_text_children(nodes),
+                            get_has_multiple_non_text_children(nodes),
                             ctx,
                             state,
                         ))
@@ -558,7 +558,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             }
         }
 
-        let has_two_more_non_text_children = has_two_more_non_text_children(&self.children);
+        let has_multiple_non_text_children = get_has_multiple_non_text_children(&self.children);
 
         let (leading_ws, trailing_ws) = if is_empty {
             (Doc::nil(), Doc::nil())
@@ -567,7 +567,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                 format_ws_sensitive_leading_ws(&self.children),
                 format_ws_sensitive_trailing_ws(&self.children),
             )
-        } else if has_two_more_non_text_children {
+        } else if has_multiple_non_text_children {
             (Doc::hard_line(), Doc::hard_line())
         } else {
             (
@@ -705,7 +705,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                     ClosingTagLineBreakForEmpty::Never => {}
                 };
             }
-        } else if !is_whitespace_sensitive && has_two_more_non_text_children {
+        } else if !is_whitespace_sensitive && has_multiple_non_text_children {
             state.indent_level += 1;
             docs.push(leading_ws.nest(ctx.indent_width));
             docs.push(
@@ -735,7 +735,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             }
             let children_doc = leading_ws.append(format_children_without_inserting_linebreak(
                 &self.children,
-                has_two_more_non_text_children,
+                has_multiple_non_text_children,
                 ctx,
                 &state,
             ));
@@ -1095,14 +1095,14 @@ impl<'s> DocGen<'s> for Root<'s> {
             ctx.options.whitespace_sensitivity,
             WhitespaceSensitivity::Css | WhitespaceSensitivity::Strict
         );
-        let has_two_more_non_text_children = has_two_more_non_text_children(&self.children);
+        let has_multiple_non_text_children = get_has_multiple_non_text_children(&self.children);
 
         if is_whole_document_like
             && !matches!(
                 ctx.options.whitespace_sensitivity,
                 WhitespaceSensitivity::Strict
             )
-            || !is_whitespace_sensitive && has_two_more_non_text_children
+            || !is_whitespace_sensitive && has_multiple_non_text_children
         {
             let mut state = state.clone();
             state.indent_level += 1;
@@ -1111,7 +1111,7 @@ impl<'s> DocGen<'s> for Root<'s> {
         } else {
             format_children_without_inserting_linebreak(
                 &self.children,
-                has_two_more_non_text_children,
+                has_multiple_non_text_children,
                 ctx,
                 state,
             )
@@ -2076,7 +2076,7 @@ fn should_add_whitespace_after_text_node<'s>(
     }
 }
 
-fn has_two_more_non_text_children(children: &[Node]) -> bool {
+fn get_has_multiple_non_text_children(children: &[Node]) -> bool {
     children.iter().filter(|child| !is_text_like(child)).count() > 1
 }
 
@@ -2202,7 +2202,7 @@ fn is_text_like(node: &Node) -> bool {
 
 fn format_children_without_inserting_linebreak<'s, E, F>(
     children: &[Node<'s>],
-    has_two_more_non_text_children: bool,
+    has_multiple_non_text_children: bool,
     ctx: &mut Ctx<'s, E, F>,
     state: &State<'s>,
 ) -> Doc<'s>
@@ -2232,7 +2232,7 @@ where
                             if !is_first && !is_last && is_all_ascii_whitespace(text_node.raw) {
                                 return if text_node.line_breaks > 1 {
                                     Doc::empty_line().append(Doc::hard_line())
-                                } else if has_two_more_non_text_children {
+                                } else if has_multiple_non_text_children {
                                     Doc::hard_line()
                                 } else {
                                     Doc::line_or_space()
@@ -2393,7 +2393,7 @@ where
         _ => format_ws_sensitive_leading_ws(children)
             .append(format_children_without_inserting_linebreak(
                 children,
-                has_two_more_non_text_children(children),
+                get_has_multiple_non_text_children(children),
                 ctx,
                 state,
             ))
