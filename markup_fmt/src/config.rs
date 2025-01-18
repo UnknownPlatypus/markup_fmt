@@ -215,6 +215,10 @@ pub struct LanguageOptions {
     #[cfg_attr(feature = "config_serde", serde(alias = "scriptFormatter"))]
     pub script_formatter: Option<ScriptFormatter>,
 
+    #[cfg_attr(feature = "config_serde", serde(alias = "customBlocks"))]
+    /// See [`customBlocks`](https://github.com/g-plane/markup_fmt/blob/main/docs/config.md#customblocks) on GitHub
+    pub custom_blocks: Option<Vec<String>>,
+
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreCommentDirective"))]
     pub ignore_comment_directive: String,
 
@@ -262,6 +266,7 @@ impl Default for LanguageOptions {
             svelte_directive_shorthand: None,
             astro_attr_shorthand: None,
             script_formatter: None,
+            custom_blocks: None,
             ignore_comment_directive: "markup-fmt-ignore".into(),
             ignore_file_comment_directive: "markup-fmt-ignore-file".into(),
         }
