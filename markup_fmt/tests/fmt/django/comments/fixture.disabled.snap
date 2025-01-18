@@ -1,0 +1,23 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<!DOCTYPE html>
+<html>
+  <body>
+    {#This is a comment#}
+    {# This is a comment #}
+
+    {#     This is a comment with a lot of space around            #}
+
+    {#This is a very very very very very very very very very very very very long comment#}
+    {# This is a very very very very very very very very very very very very long comment #}
+    {#
+        This is a very very very very very very very very very very very very long comment
+        #}
+    {% comment "commented-out template because we no longer use this" %}
+    {% for user in users %}
+      ...
+    {% endfor %}
+    {% endcomment %}
+  </body>
+</html>
