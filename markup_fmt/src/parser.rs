@@ -30,6 +30,7 @@ pub enum Language {
 pub struct Parser<'s> {
     source: &'s str,
     language: Language,
+    custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     state: ParserState,
 }
@@ -40,10 +41,11 @@ struct ParserState {
 }
 
 impl<'s> Parser<'s> {
-    pub fn new(source: &'s str, language: Language) -> Self {
+    pub fn new(source: &'s str, language: Language, custom_blocks: Vec<String>) -> Self {
         Self {
             source,
             language,
+            custom_blocks,
             chars: source.char_indices().peekable(),
             state: Default::default(),
         }
@@ -1285,21 +1287,47 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if matches!(
-            tag_name,
-            "for"
-                | "if"
-                | "macro"
-                | "call"
-                | "filter"
-                | "block"
-                | "apply"
-                | "autoescape"
-                | "embed"
-                | "with"
-                | "trans"
-                | "raw"
-        ) || tag_name == "set" && !first_tag.content.contains('=')
+        if (matches!(self.language, Language::Jinja)
+            && matches!(
+                tag_name,
+                "for"
+                    | "if"
+                    | "macro"
+                    | "call"
+                    | "filter"
+                    | "block"
+                    | "apply"
+                    | "autoescape"
+                    | "embed"
+                    | "with"
+                    | "trans"
+                    | "raw"
+            )
+            || tag_name == "set" && !first_tag.content.contains('='))
+            || (matches!(self.language, Language::Django)
+                && matches!(
+                    tag_name,
+                    "autoescape"
+                        | "block"
+                        | "blocktrans"
+                        | "blocktranslate"
+                        | "cache"
+                        | "comment"
+                        | "filter"
+                        | "for"
+                        | "if"
+                        | "ifchanged"
+                        | "language"
+                        | "localize"
+                        | "localtime"
+                        | "spaceless"
+                        | "tag"
+                        | "timezone"
+                        | "upper"
+                        | "verbatim"
+                        | "with"
+                )
+                || self.custom_blocks.iter().any(|s| s == tag_name))
         {
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
 
