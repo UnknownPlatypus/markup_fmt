@@ -1,6 +1,5 @@
 ---
 source: markup_fmt/tests/fmt.rs
-snapshot_kind: text
 ---
 <select autocomplete="billing country">
   <option>US</option>
@@ -12,12 +11,10 @@ snapshot_kind: text
   <option>Visa</option>
   <option>Mastercard</option>
 </select>
-<select
-  autocomplete="
-    section-blue
-    billing cc-type
-  "
->
+<select autocomplete="
+  section-blue
+  billing cc-type
+">
   <option>Visa</option>
   <option>Mastercard</option>
 </select>
@@ -43,20 +40,16 @@ snapshot_kind: text
 
 <form autocomplete="country"></form>
 <form autocomplete="billing country"></form>
-<form
-  autocomplete="
-    section-blue
-    country
-  "
->
+<form autocomplete="
+  section-blue
+  country
+">
 </form>
-<form
-  autocomplete="
-    section-blue
-    billing
-    country
-  "
->
+<form autocomplete="
+  section-blue
+  billing
+  country
+">
 </form>
 
 <div autocomplete="    billing country"></div>
