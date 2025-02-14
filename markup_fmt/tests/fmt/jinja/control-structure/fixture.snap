@@ -86,3 +86,6 @@ source: markup_fmt/tests/fmt.rs
     {% endfor %}
   </ul>
 {% endraw %}
+{% if kenny.sick %}{%
+    include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg"
+  %}{% endif %}

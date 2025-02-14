@@ -6,6 +6,9 @@ source: markup_fmt/tests/fmt.rs
   <body>
     {# This is a comment #}
     {# This is a comment #}
+
+    {# This is a comment with a lot of space around #}
+
     {#
       This is a very very very very very very very very very very very very long comment
     #}
