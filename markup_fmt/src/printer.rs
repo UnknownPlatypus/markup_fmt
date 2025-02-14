@@ -403,7 +403,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             .unwrap_or(self.tag_name);
         let formatted_tag_name = if matches!(
             ctx.language,
-            Language::Html | Language::Jinja | Language::Vento
+            Language::Html | Language::Jinja | Language::Django | Language::Vento
         ) && css_dataset::tags::STANDARD_HTML_TAGS
             .iter()
             .any(|tag| tag.eq_ignore_ascii_case(self.tag_name))
@@ -746,7 +746,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                             | NodeKind::SvelteInterpolation(..)
                             | NodeKind::Comment(..)
                             | NodeKind::AstroExpr(..)
-                            | NodeKind::JinjaInterpolation(..)
+                            | NodeKind::JinjaOrDjangoInterpolation(..)
                             | NodeKind::VentoInterpolation(..)
                     )
                 });
@@ -841,19 +841,23 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaComment<'s> {
+impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         if ctx.options.format_comments {
-            Doc::text("{#")
-                .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim()))
-                .nest(ctx.indent_width)
-                .append(Doc::line_or_space())
-                .append(Doc::text("#}"))
-                .group()
+            match ctx.language {
+                Language::Jinja => Doc::text("{#")
+                    .append(Doc::line_or_space())
+                    .concat(reflow_with_indent(self.raw.trim()))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text("#}"))
+                    .group(),
+                Language::Django => Doc::text(format!("{{# {} #}}", self.raw.trim())),
+                _ => unreachable!(),
+            }
         } else {
             Doc::text("{#")
                 .concat(reflow_raw(self.raw))
@@ -862,18 +866,22 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
+impl<'s> DocGen<'s> for JinjaOrDjangoInterpolation<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        Doc::text("{{")
-            .append(Doc::line_or_space())
-            .append(Doc::text(self.expr.trim()))
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(Doc::text("}}"))
-            .group()
+        match ctx.language {
+            Language::Jinja => Doc::text("{{")
+                .append(Doc::line_or_space())
+                .append(Doc::text(self.expr.trim()))
+                .nest(ctx.indent_width)
+                .append(Doc::line_or_space())
+                .append(Doc::text("}}"))
+                .group(),
+            Language::Django => Doc::text(format!("{{{{ {} }}}}", self.expr.trim())),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -882,36 +890,42 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let (prefix, content) = self
-            .content
-            .strip_prefix('-')
-            .map(|content| ("-", content))
-            .unwrap_or(("", self.content));
-        let (content, suffix) = self
-            .content
-            .strip_suffix('-')
-            .map(|content| (content, "-"))
-            .unwrap_or((content, ""));
+        match ctx.language {
+            Language::Jinja => {
+                let (prefix, content) = self
+                    .content
+                    .strip_prefix('-')
+                    .map(|content| ("-", content))
+                    .unwrap_or(("", self.content));
+                let (content, suffix) = self
+                    .content
+                    .strip_suffix('-')
+                    .map(|content| (content, "-"))
+                    .unwrap_or((content, ""));
 
-        let docs = Doc::text("{%")
-            .append(Doc::text(prefix))
-            .append(Doc::line_or_space());
-        let docs = if content.trim().starts_with("set") {
-            if let Some((left, right)) = content.split_once('=') {
-                docs.append(Doc::text(left.trim()))
-                    .append(Doc::text(" = "))
-                    .append(Doc::text(right.trim()))
-            } else {
-                docs.append(Doc::text(content.trim()))
+                let docs = Doc::text("{%")
+                    .append(Doc::text(prefix))
+                    .append(Doc::line_or_space());
+                let docs = if content.trim().starts_with("set") {
+                    if let Some((left, right)) = content.split_once('=') {
+                        docs.append(Doc::text(left.trim()))
+                            .append(Doc::text(" = "))
+                            .append(Doc::text(right.trim()))
+                    } else {
+                        docs.append(Doc::text(content.trim()))
+                    }
+                } else {
+                    docs.append(Doc::text(content.trim()))
+                };
+                docs.nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(suffix))
+                    .append(Doc::text("%}"))
+                    .group()
             }
-        } else {
-            docs.append(Doc::text(content.trim()))
-        };
-        docs.nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(Doc::text(suffix))
-            .append(Doc::text("%}"))
-            .group()
+            Language::Django => Doc::text(format!("{{% {} %}}", self.content.trim())),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -1051,8 +1065,8 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             NodeKind::Element(element) => element.doc(ctx, state),
             NodeKind::FrontMatter(front_matter) => front_matter.doc(ctx, state),
             NodeKind::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
-            NodeKind::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
-            NodeKind::JinjaInterpolation(jinja_interpolation) => {
+            NodeKind::JinjaOrDjangoComment(jinja_comment) => jinja_comment.doc(ctx, state),
+            NodeKind::JinjaOrDjangoInterpolation(jinja_interpolation) => {
                 jinja_interpolation.doc(ctx, state)
             }
             NodeKind::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
@@ -2206,7 +2220,7 @@ fn is_text_like(node: &Node) -> bool {
             | NodeKind::VueInterpolation(..)
             | NodeKind::SvelteInterpolation(..)
             | NodeKind::AstroExpr(..)
-            | NodeKind::JinjaInterpolation(..)
+            | NodeKind::JinjaOrDjangoInterpolation(..)
             | NodeKind::VentoInterpolation(..)
     )
 }
@@ -2444,7 +2458,7 @@ fn compute_attr_value_quote<'s, E, F>(
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
-    let is_jinja = matches!(ctx.language, Language::Jinja);
+    let is_jinja = matches!(ctx.language, Language::Jinja | Language::Django);
     let has_single = attr_value.contains('\'');
     let has_double = attr_value.contains('"');
     if has_double && has_single {

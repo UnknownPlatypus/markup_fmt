@@ -61,7 +61,7 @@ pub enum AstroExprChild<'s> {
 pub enum Attribute<'s> {
     Astro(AstroAttribute<'s>),
     JinjaBlock(JinjaBlock<'s, Attribute<'s>>),
-    JinjaComment(JinjaComment<'s>),
+    JinjaComment(JinjaOrDjangoComment<'s>),
     JinjaTag(JinjaTag<'s>),
     Native(NativeAttribute<'s>),
     Svelte(SvelteAttribute<'s>),
@@ -96,11 +96,11 @@ pub struct JinjaBlock<'s, T> {
     pub body: Vec<JinjaTagOrChildren<'s, T>>,
 }
 
-pub struct JinjaComment<'s> {
+pub struct JinjaOrDjangoComment<'s> {
     pub raw: &'s str,
 }
 
-pub struct JinjaInterpolation<'s> {
+pub struct JinjaOrDjangoInterpolation<'s> {
     pub expr: &'s str,
 }
 
@@ -136,8 +136,8 @@ pub enum NodeKind<'s> {
     Element(Element<'s>),
     FrontMatter(FrontMatter<'s>),
     JinjaBlock(JinjaBlock<'s, Node<'s>>),
-    JinjaComment(JinjaComment<'s>),
-    JinjaInterpolation(JinjaInterpolation<'s>),
+    JinjaOrDjangoComment(JinjaOrDjangoComment<'s>),
+    JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation<'s>),
     JinjaTag(JinjaTag<'s>),
     SvelteAtTag(SvelteAtTag<'s>),
     SvelteAwaitBlock(Box<SvelteAwaitBlock<'s>>),
