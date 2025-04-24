@@ -183,8 +183,8 @@ impl<'s> Parser<'s> {
             }
         }
 
-        let mut aliases = None;
-        if self.chars.next_if(|(_, c)| *c == ';').is_some() {
+        let mut aliases = vec![];
+        while self.chars.next_if(|(_, c)| *c == ';').is_some() {
             self.skip_ws();
             let mut chars = self.chars.clone();
             if chars
@@ -195,7 +195,7 @@ impl<'s> Parser<'s> {
             {
                 if let Some((start, _)) = self.chars.peek() {
                     let start = *start;
-                    aliases = Some(self.parse_angular_inline_script(start)?);
+                    aliases.push(self.parse_angular_inline_script(start)?);
                 }
             }
         }
@@ -208,9 +208,9 @@ impl<'s> Parser<'s> {
         self.skip_ws();
         let children = self.parse_angular_control_flow_children()?;
 
-        self.skip_ws();
         let mut empty = None;
         let mut chars = self.chars.clone();
+        while chars.next_if(|(_, c)| c.is_ascii_whitespace()).is_some() {}
         if chars
             .next_if(|(_, c)| *c == '@')
             .and_then(|_| chars.next_if(|(_, c)| *c == 'e'))
@@ -443,8 +443,7 @@ impl<'s> Parser<'s> {
         }
         self.skip_ws();
 
-        let mut cases = Vec::with_capacity(2);
-        let mut default = None;
+        let mut arms = Vec::with_capacity(2);
         while let Some((_, '@')) = self.chars.peek() {
             self.chars.next();
             match self.chars.peek() {
@@ -469,7 +468,11 @@ impl<'s> Parser<'s> {
                     }
                     self.skip_ws();
                     let children = self.parse_angular_control_flow_children()?;
-                    cases.push(AngularCase { expr, children });
+                    arms.push(AngularSwitchArm {
+                        keyword: "case",
+                        expr: Some(expr),
+                        children,
+                    });
                     self.skip_ws();
                 }
                 Some((_, 'd')) => {
@@ -487,8 +490,12 @@ impl<'s> Parser<'s> {
                         return Err(self.emit_error(SyntaxErrorKind::ExpectKeyword("default")));
                     }
                     self.skip_ws();
-                    default = Some(self.parse_angular_control_flow_children()?);
-                    break;
+                    arms.push(AngularSwitchArm {
+                        keyword: "default",
+                        expr: None,
+                        children: self.parse_angular_control_flow_children()?,
+                    });
+                    self.skip_ws();
                 }
                 _ => return Err(self.emit_error(SyntaxErrorKind::ExpectKeyword("case"))),
             }
@@ -499,11 +506,7 @@ impl<'s> Parser<'s> {
             return Err(self.emit_error(SyntaxErrorKind::ExpectChar('}')));
         }
 
-        Ok(AngularSwitch {
-            expr,
-            cases,
-            default,
-        })
+        Ok(AngularSwitch { expr, arms })
     }
 
     fn parse_astro_attr(&mut self) -> PResult<AstroAttribute<'s>> {
@@ -2246,33 +2249,31 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_tag_name(&mut self) -> PResult<&'s str> {
-        let start = match self.chars.peek() {
+        let (start, mut end) = match self.chars.peek() {
             Some((i, c)) if is_html_tag_name_char(*c) => {
+                let c = *c;
                 let start = *i;
                 self.chars.next();
-                start
+                (start, start + c.len_utf8())
             }
-            Some((i, '{')) if matches!(self.language, Language::Jinja | Language::Django) => *i,
+            Some((i, '{')) if matches!(self.language, Language::Jinja | Language::Django) => (*i, *i + 1),
             Some((_, '>')) if matches!(self.language, Language::Astro) => {
                 // Astro allows fragment
                 return Ok("");
             }
             _ => return Err(self.emit_error(SyntaxErrorKind::ExpectTagName)),
         };
-        let mut end = start;
 
         while let Some((i, c)) = self.chars.peek() {
             if is_html_tag_name_char(*c) {
-                end = *i;
+                end = *i + c.len_utf8();
                 self.chars.next();
             } else if *c == '{' && matches!(self.language, Language::Jinja | Language::Django) {
                 let current_i = *i;
                 let mut chars = self.chars.clone();
                 chars.next();
                 if chars.next_if(|(_, c)| *c == '{').is_some() {
-                    // We use inclusive range when returning string, so we need to substract 1 here.
-                    end =
-                        current_i + self.parse_mustache_interpolation()?.0.len() + "{{}}".len() - 1;
+                    end = current_i + self.parse_mustache_interpolation()?.0.len() + "{{}}".len();
                 } else {
                     break;
                 }
@@ -2281,7 +2282,7 @@ impl<'s> Parser<'s> {
             }
         }
 
-        unsafe { Ok(self.source.get_unchecked(start..=end)) }
+        unsafe { Ok(self.source.get_unchecked(start..end)) }
     }
 
     fn parse_text_node(&mut self) -> PResult<TextNode<'s>> {
