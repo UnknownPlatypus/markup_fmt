@@ -1,0 +1,7 @@
+[default]
+
+[disabled]
+singleAttrSameLine = false
+
+[enabled]
+singleAttrSameLine = true

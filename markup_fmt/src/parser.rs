@@ -1775,7 +1775,10 @@ impl<'s> Parser<'s> {
             .is_some()
         {
             self.skip_ws();
-            Some(self.parse_svelte_binding()?)
+            Some(match self.chars.peek() {
+                Some((_, '}')) => None,
+                _ => Some(self.parse_svelte_binding()?),
+            })
         } else {
             None
         };
@@ -1791,7 +1794,10 @@ impl<'s> Parser<'s> {
             .is_some()
         {
             self.skip_ws();
-            Some(self.parse_svelte_binding()?)
+            Some(match self.chars.peek() {
+                Some((_, '}')) => None,
+                _ => Some(self.parse_svelte_binding()?),
+            })
         } else {
             None
         };
@@ -1818,8 +1824,14 @@ impl<'s> Parser<'s> {
             .is_ok()
         {
             self.skip_ws();
-            let binding = self.parse_svelte_binding()?;
-            self.skip_ws();
+            let binding = match self.chars.peek() {
+                Some((_, '}')) => None,
+                _ => {
+                    let binding = self.parse_svelte_binding()?;
+                    self.skip_ws();
+                    Some(binding)
+                }
+            };
             if self.chars.next_if(|(_, c)| *c == '}').is_none() {
                 return Err(self.emit_error(SyntaxErrorKind::ExpectSvelteThenBlock));
             }
@@ -1847,9 +1859,12 @@ impl<'s> Parser<'s> {
             self.skip_ws();
             let binding = match self.chars.peek() {
                 Some((_, '}')) => None,
-                _ => Some(self.parse_svelte_binding()?),
+                _ => {
+                    let binding = self.parse_svelte_binding()?;
+                    self.skip_ws();
+                    Some(binding)
+                }
             };
-            self.skip_ws();
             if self.chars.next_if(|(_, c)| *c == '}').is_none() {
                 return Err(self.emit_error(SyntaxErrorKind::ExpectSvelteCatchBlock));
             }
@@ -1944,6 +1959,7 @@ impl<'s> Parser<'s> {
         };
         self.skip_ws();
 
+        let mut binding = None;
         let expr = {
             let start = self
                 .chars
@@ -1951,6 +1967,7 @@ impl<'s> Parser<'s> {
                 .map(|(i, _)| *i)
                 .unwrap_or(self.source.len());
             let mut end = start;
+            let mut pair_stack = vec![];
             loop {
                 match self.chars.peek() {
                     Some((i, c)) if c.is_ascii_whitespace() => {
@@ -1963,7 +1980,48 @@ impl<'s> Parser<'s> {
                             .is_some()
                         {
                             self.chars = chars;
+                            self.skip_ws();
+                            binding = Some(self.parse_svelte_binding()?);
                             break;
+                        }
+                    }
+                    Some((_, '(')) => {
+                        pair_stack.push('(');
+                        self.chars.next();
+                    }
+                    Some((i, ')')) if matches!(pair_stack.last(), Some('(')) => {
+                        pair_stack.pop();
+                        end = *i;
+                        self.chars.next();
+                    }
+                    Some((_, '[')) => {
+                        pair_stack.push('[');
+                        self.chars.next();
+                    }
+                    Some((i, ']')) if matches!(pair_stack.last(), Some('[')) => {
+                        pair_stack.pop();
+                        end = *i;
+                        self.chars.next();
+                    }
+                    Some((_, '{')) => {
+                        pair_stack.push('{');
+                        self.chars.next();
+                    }
+                    Some((i, '}')) => {
+                        end = *i;
+                        if matches!(pair_stack.last(), Some('{')) {
+                            pair_stack.pop();
+                            self.chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    Some((i, ',')) => {
+                        end = *i;
+                        if pair_stack.is_empty() {
+                            break;
+                        } else {
+                            self.chars.next();
                         }
                     }
                     Some((i, _)) => {
@@ -1975,9 +2033,6 @@ impl<'s> Parser<'s> {
             }
             (unsafe { self.source.get_unchecked(start..end) }, start)
         };
-
-        self.skip_ws();
-        let binding = self.parse_svelte_binding()?;
 
         self.skip_ws();
         let index = if self.chars.next_if(|(_, c)| *c == ',').is_some() {

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://plugins.dprint.dev/g-plane/markup_fmt/v0.19.1/schema.json",
+  "$id": "https://plugins.dprint.dev/g-plane/markup_fmt/v0.20.0/schema.json",
   "title": "Config",
   "description": "Configuration for dprint-plugin-markup.",
   "type": "object",
@@ -132,6 +132,11 @@
       "description": "Control whether attributes should be put on single line when possible. This option conflicts with `maxAttrsPerLine` option.",
       "type": "boolean",
       "default": false
+    },
+    "singleAttrSameLine": {
+      "description": "Control whether single attribute should be put on the same line with tag name.",
+      "type": "boolean",
+      "default": true
     },
     "html.normal.selfClosing": {
       "description": "Control whether HTML normal element should be self-closed or not if it doesn't have children.",

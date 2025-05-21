@@ -447,8 +447,12 @@ impl<'s> DocGen<'s> for Element<'s> {
         docs.push(Doc::text("<"));
         docs.push(Doc::text(formatted_tag_name.clone()));
 
-        match self.attrs.as_slice() {
-            [attr] if !is_whitespace_sensitive && !is_multi_line_attr(attr) => {
+        match &*self.attrs {
+            [attr]
+                if ctx.options.single_attr_same_line
+                    && !is_whitespace_sensitive
+                    && !is_multi_line_attr(attr) =>
+            {
                 docs.push(Doc::space());
                 docs.push(attr.doc(ctx, &state));
                 if self_closing && is_empty {
@@ -462,14 +466,19 @@ impl<'s> DocGen<'s> for Element<'s> {
                 }
             }
             _ => {
-                let attrs_sep = if !self.first_attr_same_line
-                    && !ctx.options.prefer_attrs_single_line
-                    && self.attrs.len() > 1
-                    && !ctx
+                let attrs_sep = if self.first_attr_same_line {
+                    Doc::line_or_space()
+                } else if self.attrs.len() <= 1 {
+                    if ctx.options.single_attr_same_line {
+                        Doc::line_or_space()
+                    } else {
+                        Doc::hard_line()
+                    }
+                } else if !ctx.options.prefer_attrs_single_line
+                    && ctx
                         .options
                         .max_attrs_per_line
-                        .map(|value| value.get() > 1)
-                        .unwrap_or_default()
+                        .is_none_or(|value| value.get() <= 1)
                 {
                     Doc::hard_line()
                 } else {
@@ -1213,16 +1222,22 @@ impl<'s> DocGen<'s> for SvelteAwaitBlock<'s> {
             state,
         )));
 
-        if let Some((then_binding, start)) = self.then_binding {
+        if let Some(then) = self.then_binding {
             head.push(Doc::line_or_space());
-            head.push(Doc::text("then "));
-            head.push(Doc::text(ctx.format_binding(then_binding, start, state)));
+            head.push(Doc::text("then"));
+            if let Some((binding, start)) = then {
+                head.push(Doc::space());
+                head.push(Doc::text(ctx.format_binding(binding, start, state)));
+            }
         }
 
-        if let Some((catch_binding, start)) = self.catch_binding {
+        if let Some(catch) = self.catch_binding {
             head.push(Doc::line_or_space());
-            head.push(Doc::text("catch "));
-            head.push(Doc::text(ctx.format_binding(catch_binding, start, state)));
+            head.push(Doc::text("catch"));
+            if let Some((binding, start)) = catch {
+                head.push(Doc::space());
+                head.push(Doc::text(ctx.format_binding(binding, start, state)));
+            }
         }
 
         let mut docs = Vec::with_capacity(5);
@@ -1282,13 +1297,11 @@ impl<'s> DocGen<'s> for SvelteEachBlock<'s> {
             self.expr.1,
             state,
         )));
-        head.push(Doc::text(" as"));
-        head.push(Doc::line_or_space());
-        head.push(Doc::text(ctx.format_binding(
-            self.binding.0,
-            self.binding.1,
-            state,
-        )));
+        if let Some(binding) = self.binding {
+            head.push(Doc::text(" as"));
+            head.push(Doc::line_or_space());
+            head.push(Doc::text(ctx.format_binding(binding.0, binding.1, state)));
+        }
 
         if let Some(index) = self.index {
             head.push(Doc::text(","));
@@ -1463,18 +1476,19 @@ impl<'s> DocGen<'s> for SvelteThenBlock<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        Doc::text("{:then ")
-            .append(Doc::text(ctx.format_binding(
-                self.binding.0,
-                self.binding.1,
-                state,
-            )))
-            .append(Doc::text("}"))
-            .append(format_control_structure_block_children(
-                &self.children,
-                ctx,
-                state,
-            ))
+        let mut docs = Vec::with_capacity(5);
+        docs.push(Doc::text("{:then"));
+        if let Some((binding, start)) = self.binding {
+            docs.push(Doc::space());
+            docs.push(Doc::text(ctx.format_binding(binding, start, state)));
+        }
+        docs.push(Doc::text("}"));
+        docs.push(format_control_structure_block_children(
+            &self.children,
+            ctx,
+            state,
+        ));
+        Doc::list(docs)
     }
 }
 
