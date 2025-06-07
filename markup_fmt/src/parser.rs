@@ -73,6 +73,15 @@ impl<'s> Parser<'s> {
     }
 
     fn emit_error_with_pos(&self, kind: SyntaxErrorKind, pos: usize) -> SyntaxError {
+        let (line, column) = self.pos_to_line_col(pos);
+        SyntaxError {
+            kind,
+            pos,
+            line,
+            column,
+        }
+    }
+    fn pos_to_line_col(&self, pos: usize) -> (usize, usize) {
         let search = memchr::memchr_iter(b'\n', self.source.as_bytes()).try_fold(
             (1, 0),
             |(line, prev_offset), offset| match pos.cmp(&offset) {
@@ -81,15 +90,9 @@ impl<'s> Parser<'s> {
                 Ordering::Greater => ControlFlow::Continue((line + 1, offset)),
             },
         );
-        let (line, column) = match search {
+        match search {
             ControlFlow::Break((line, offset)) => (line, pos - offset + 1),
             ControlFlow::Continue((line, _)) => (line, 0),
-        };
-        SyntaxError {
-            kind,
-            pos,
-            line,
-            column,
         }
     }
 
@@ -941,7 +944,7 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_element(&mut self) -> PResult<Element<'s>> {
-        let Some(..) = self.chars.next_if(|(_, c)| *c == '<') else {
+        let Some((element_start, _)) = self.chars.next_if(|(_, c)| *c == '<') else {
             return Err(self.emit_error(SyntaxErrorKind::ExpectElement));
         };
         let tag_name = self.parse_tag_name()?;
@@ -1019,15 +1022,26 @@ impl<'s> Parser<'s> {
                         self.chars = chars;
                         let close_tag_name = self.parse_tag_name()?;
                         if !close_tag_name.eq_ignore_ascii_case(tag_name) {
-                            return Err(
-                                self.emit_error_with_pos(SyntaxErrorKind::ExpectCloseTag, pos)
-                            );
+                            let (line, column) = self.pos_to_line_col(element_start);
+                            return Err(self.emit_error_with_pos(
+                                SyntaxErrorKind::ExpectCloseTag {
+                                    tag_name: tag_name.into(),
+                                    line,
+                                    column,
+                                },
+                                pos,
+                            ));
                         }
                         self.skip_ws();
                         if self.chars.next_if(|(_, c)| *c == '>').is_some() {
                             break;
                         }
-                        return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag));
+                        let (line, column) = self.pos_to_line_col(element_start);
+                        return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
+                            tag_name: tag_name.into(),
+                            line,
+                            column,
+                        }));
                     }
                     children.push(self.parse_node()?);
                 }
@@ -1049,7 +1063,14 @@ impl<'s> Parser<'s> {
                         children.push(self.parse_node()?);
                     }
                 }
-                None => return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag)),
+                None => {
+                    let (line, column) = self.pos_to_line_col(element_start);
+                    return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
+                        tag_name: tag_name.into(),
+                        line,
+                        column,
+                    }));
+                }
             }
         }
 
