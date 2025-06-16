@@ -833,6 +833,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                 .map(|child| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => {
+                        // TODO: do raw formatting for comment / raw / verbatim here ?
                         format_control_structure_block_children(children, ctx, state)
                     }
                 })

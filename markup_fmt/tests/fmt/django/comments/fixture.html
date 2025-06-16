@@ -12,9 +12,19 @@
         This is a very very very very very very very very very very very very long comment
         #}
         {% comment "commented-out template because we no longer use this" %}
-            {% for user in users %}
-                ...
-            {% endfor %}
+
+        {% for user in users %}
+            ...
+        {% endfor %}
+
+        {% endcomment %}
+        {% comment %}
+            Props:
+              - form: AddStaffForm
         {% endcomment %}
     </body>
 </html>
+{% comment %}
+    Props:
+      - form: AddStaffForm
+{% endcomment %}

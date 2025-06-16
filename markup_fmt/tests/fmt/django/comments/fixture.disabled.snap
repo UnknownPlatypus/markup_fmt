@@ -19,5 +19,11 @@ source: markup_fmt/tests/fmt.rs
         ...
       {% endfor %}
     {% endcomment %}
+    {% comment %}
+      Props: - form: AddStaffForm
+    {% endcomment %}
   </body>
 </html>
+{% comment %}
+  Props: - form: AddStaffForm
+{% endcomment %}
