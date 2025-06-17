@@ -19,6 +19,7 @@ pub enum SyntaxErrorKind {
     ExpectAstroExpr,
     ExpectAttrName,
     ExpectAttrValue,
+    ExpectCdata,
     ExpectChar(char),
     ExpectCloseTag {
         tag_name: String,
@@ -35,6 +36,7 @@ pub enum SyntaxErrorKind {
     ExpectKeyword(&'static str),
     ExpectMustacheInterpolation,
     ExpectSelfCloseTag,
+    ExpectSvelteAttachment,
     ExpectSvelteAtTag,
     ExpectSvelteAttr,
     ExpectSvelteAwaitBlock,
@@ -51,6 +53,7 @@ pub enum SyntaxErrorKind {
     ExpectTextNode,
     ExpectVentoBlockEnd,
     ExpectVueDirective,
+    ExpectXmlDecl,
 }
 
 impl fmt::Display for SyntaxErrorKind {
@@ -64,6 +67,7 @@ impl fmt::Display for SyntaxErrorKind {
             SyntaxErrorKind::ExpectAstroExpr => "expected Astro expression".into(),
             SyntaxErrorKind::ExpectAttrName => "expected attribute name".into(),
             SyntaxErrorKind::ExpectAttrValue => "expected attribute value".into(),
+            SyntaxErrorKind::ExpectCdata => "expected CDATA section".into(),
             SyntaxErrorKind::ExpectChar(c) => format!("expected char '{c}'").into(),
             SyntaxErrorKind::ExpectCloseTag {
                 tag_name,
@@ -87,6 +91,7 @@ impl fmt::Display for SyntaxErrorKind {
                 "expected mustache-like interpolation".into()
             }
             SyntaxErrorKind::ExpectSelfCloseTag => "expected self close tag".into(),
+            SyntaxErrorKind::ExpectSvelteAttachment => "expected Svelte attachment".into(),
             SyntaxErrorKind::ExpectSvelteAtTag => "expected Svelte `{@` tag".into(),
             SyntaxErrorKind::ExpectSvelteAttr => "expected Svelte attribute".into(),
             SyntaxErrorKind::ExpectSvelteAwaitBlock => "expected Svelte await block".into(),
@@ -103,6 +108,7 @@ impl fmt::Display for SyntaxErrorKind {
             SyntaxErrorKind::ExpectTextNode => "expected text node".into(),
             SyntaxErrorKind::ExpectVentoBlockEnd => "expected Vento block end".into(),
             SyntaxErrorKind::ExpectVueDirective => "expected Vue directive".into(),
+            SyntaxErrorKind::ExpectXmlDecl => "expected XML declaration".into(),
         };
 
         write!(f, "{reason}")

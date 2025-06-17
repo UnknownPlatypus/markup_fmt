@@ -25,6 +25,7 @@ pub enum Language {
     Jinja,
     Django,
     Vento,
+    Xml,
 }
 
 pub struct Parser<'s> {
@@ -678,14 +679,20 @@ impl<'s> Parser<'s> {
 
     fn parse_attr(&mut self) -> PResult<Attribute<'s>> {
         match self.language {
-            Language::Html | Language::Angular => self.parse_native_attr().map(Attribute::Native),
+            Language::Html | Language::Angular | Language::Xml => {
+                self.parse_native_attr().map(Attribute::Native)
+            }
             Language::Vue => self
                 .try_parse(Parser::parse_vue_directive)
                 .map(Attribute::VueDirective)
                 .or_else(|_| self.parse_native_attr().map(Attribute::Native)),
             Language::Svelte => self
-                .try_parse(Parser::parse_svelte_attr)
-                .map(Attribute::Svelte)
+                .try_parse(Parser::parse_svelte_attachment)
+                .map(Attribute::SvelteAttachment)
+                .or_else(|_| {
+                    self.try_parse(Parser::parse_svelte_attr)
+                        .map(Attribute::Svelte)
+                })
                 .or_else(|_| self.parse_native_attr().map(Attribute::Native)),
             Language::Astro => self
                 .try_parse(Parser::parse_astro_attr)
@@ -881,6 +888,48 @@ impl<'s> Parser<'s> {
         }
     }
 
+    fn parse_cdata(&mut self) -> PResult<Cdata<'s>> {
+        let Some((start, _)) = self
+            .chars
+            .next_if(|(_, c)| *c == '<')
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == '!'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == '['))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'C'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'D'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'A'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'T'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'A'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == '['))
+        else {
+            return Err(self.emit_error(SyntaxErrorKind::ExpectCdata));
+        };
+        let start = start + 1;
+
+        let mut end = start;
+        loop {
+            match self.chars.next() {
+                Some((i, ']')) => {
+                    let mut chars = self.chars.clone();
+                    if chars
+                        .next_if(|(_, c)| *c == ']')
+                        .and_then(|_| chars.next_if(|(_, c)| *c == '>'))
+                        .is_some()
+                    {
+                        end = i;
+                        self.chars = chars;
+                        break;
+                    }
+                }
+                Some(..) => continue,
+                None => break,
+            }
+        }
+
+        Ok(Cdata {
+            raw: unsafe { self.source.get_unchecked(start..end) },
+        })
+    }
+
     fn parse_comment(&mut self) -> PResult<Comment<'s>> {
         let Some((start, _)) = self
             .chars
@@ -1016,11 +1065,12 @@ impl<'s> Parser<'s> {
         }
 
         let mut children = vec![];
-        if tag_name.eq_ignore_ascii_case("script")
-            || tag_name.eq_ignore_ascii_case("style")
-            || tag_name.eq_ignore_ascii_case("pre")
-            || tag_name.eq_ignore_ascii_case("textarea")
-        {
+        let should_parse_raw = self.language != Language::Xml
+            && (tag_name.eq_ignore_ascii_case("script")
+                || tag_name.eq_ignore_ascii_case("style")
+                || tag_name.eq_ignore_ascii_case("pre")
+                || tag_name.eq_ignore_ascii_case("textarea"));
+        if should_parse_raw {
             let text_node = self.parse_raw_text_node(tag_name)?;
             let raw = text_node.raw;
             if !raw.is_empty() {
@@ -1064,11 +1114,7 @@ impl<'s> Parser<'s> {
                     children.push(self.parse_node()?);
                 }
                 Some(..) => {
-                    if tag_name.eq_ignore_ascii_case("script")
-                        || tag_name.eq_ignore_ascii_case("style")
-                        || tag_name.eq_ignore_ascii_case("pre")
-                        || tag_name.eq_ignore_ascii_case("textarea")
-                    {
+                    if should_parse_raw {
                         let text_node = self.parse_raw_text_node(tag_name)?;
                         let raw = text_node.raw;
                         if !raw.is_empty() {
@@ -1495,16 +1541,23 @@ impl<'s> Parser<'s> {
                                 | Language::Jinja
                                 | Language::Django
                                 | Language::Vento
+                                | Language::Xml
                         ) {
                             self.try_parse(Parser::parse_comment)
                                 .map(NodeKind::Comment)
                                 .or_else(|_| {
                                     self.try_parse(Parser::parse_doctype).map(NodeKind::Doctype)
                                 })
+                                .or_else(|_| {
+                                    self.try_parse(Parser::parse_cdata).map(NodeKind::Cdata)
+                                })
                                 .or_else(|_| self.parse_text_node().map(NodeKind::Text))
                         } else {
                             self.parse_comment().map(NodeKind::Comment)
                         }
+                    }
+                    Some((_, '?')) if self.language == Language::Xml => {
+                        self.parse_xml_decl().map(NodeKind::XmlDecl)
                     }
                     _ => self.parse_text_node().map(NodeKind::Text),
                 }
@@ -1698,6 +1751,27 @@ impl<'s> Parser<'s> {
         self.skip_ws();
         let expr = self.parse_svelte_or_astro_expr()?;
         Ok(SvelteAtTag { name, expr })
+    }
+
+    fn parse_svelte_attachment(&mut self) -> PResult<SvelteAttachment<'s>> {
+        if self
+            .chars
+            .next_if(|(_, c)| *c == '{')
+            .map(|_| self.skip_ws())
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == '@'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'a'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 't'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 't'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'a'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'c'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'h'))
+            .is_some()
+        {
+            self.parse_svelte_or_astro_expr()
+                .map(|expr| SvelteAttachment { expr })
+        } else {
+            Err(self.emit_error(SyntaxErrorKind::ExpectSvelteAttachment))
+        }
     }
 
     fn parse_svelte_attr(&mut self) -> PResult<SvelteAttribute<'s>> {
@@ -2016,12 +2090,19 @@ impl<'s> Parser<'s> {
                         if chars
                             .next_if(|(_, c)| *c == 'a')
                             .and_then(|_| chars.next_if(|(_, c)| *c == 's'))
+                            .and_then(|_| chars.next_if(|(_, c)| c.is_ascii_whitespace()))
                             .is_some()
                         {
                             self.chars = chars;
                             self.skip_ws();
                             binding = Some(self.parse_svelte_binding()?);
-                            break;
+
+                            // fix for #127
+                            let mut chars = self.chars.clone();
+                            while chars.next_if(|(_, c)| c.is_ascii_whitespace()).is_some() {}
+                            if matches!(chars.peek(), Some((_, '}' | '(' | ','))) {
+                                break;
+                            }
                         }
                     }
                     Some((_, '(')) => {
@@ -2416,7 +2497,7 @@ impl<'s> Parser<'s> {
         loop {
             match self.chars.peek() {
                 Some((i, '{')) => match self.language {
-                    Language::Html => {
+                    Language::Html | Language::Xml => {
                         self.chars.next();
                     }
                     Language::Vue | Language::Vento | Language::Angular => {
@@ -2701,6 +2782,41 @@ impl<'s> Parser<'s> {
             arg_and_modifiers,
             value,
         })
+    }
+
+    fn parse_xml_decl(&mut self) -> PResult<XmlDecl<'s>> {
+        if self
+            .chars
+            .next_if(|(_, c)| *c == '<')
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == '?'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'x'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'm'))
+            .and_then(|_| self.chars.next_if(|(_, c)| *c == 'l'))
+            .and_then(|_| self.chars.next_if(|(_, c)| c.is_ascii_whitespace()))
+            .is_none()
+        {
+            return Err(self.emit_error(SyntaxErrorKind::ExpectXmlDecl));
+        };
+
+        let mut attrs = vec![];
+        loop {
+            match self.chars.peek() {
+                Some((_, '?')) => {
+                    self.chars.next();
+                    if self.chars.next_if(|(_, c)| *c == '>').is_some() {
+                        break;
+                    }
+                    return Err(self.emit_error(SyntaxErrorKind::ExpectChar('>')));
+                }
+                Some((_, c)) if c.is_ascii_whitespace() => {
+                    self.chars.next();
+                }
+                _ => {
+                    attrs.push(self.parse_native_attr()?);
+                }
+            }
+        }
+        Ok(XmlDecl { attrs })
     }
 }
 

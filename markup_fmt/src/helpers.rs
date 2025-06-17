@@ -87,22 +87,26 @@ static NON_WS_SENSITIVE_TAGS: [&str; 76] = [
 ];
 
 pub(crate) fn is_whitespace_sensitive_tag(name: &str, language: Language) -> bool {
-    if matches!(
-        language,
-        Language::Html | Language::Jinja | Language::Django | Language::Vento
-    ) {
-        // There's also a tag called "a" in SVG, so we need to check it specially.
-        name.eq_ignore_ascii_case("a")
-            || !NON_WS_SENSITIVE_TAGS
-                .iter()
-                .any(|tag| tag.eq_ignore_ascii_case(name))
-                && !css_dataset::tags::SVG_TAGS
+    match language {
+        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
+            // There's also a tag called "a" in SVG, so we need to check it specially.
+            name.eq_ignore_ascii_case("a")
+                || !NON_WS_SENSITIVE_TAGS
                     .iter()
                     .any(|tag| tag.eq_ignore_ascii_case(name))
-    } else {
-        name == "a"
-            || !NON_WS_SENSITIVE_TAGS.iter().any(|tag| *tag == name)
-                && !css_dataset::tags::SVG_TAGS.iter().any(|tag| *tag == name)
+                    && !css_dataset::tags::SVG_TAGS
+                        .iter()
+                        .any(|tag| tag.eq_ignore_ascii_case(name))
+                    && !css_dataset::tags::SVG_TAGS
+                        .iter()
+                        .any(|tag| tag.eq_ignore_ascii_case(name))
+        }
+        Language::Xml => true,
+        _ => {
+            name == "a"
+                || !NON_WS_SENSITIVE_TAGS.contains(&name)
+                    && !css_dataset::tags::SVG_TAGS.contains(&name)
+        }
     }
 }
 
@@ -112,36 +116,33 @@ static VOID_ELEMENTS: [&str; 14] = [
 ];
 
 pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
-    if matches!(
-        language,
-        Language::Html | Language::Jinja | Language::Django | Language::Vento
-    ) {
-        VOID_ELEMENTS
+    match language {
+        Language::Html | Language::Jinja | Language::Django | Language::Vento => VOID_ELEMENTS
             .iter()
-            .any(|tag| tag.eq_ignore_ascii_case(name))
-    } else {
-        VOID_ELEMENTS.iter().any(|tag| *tag == name)
+            .any(|tag| tag.eq_ignore_ascii_case(name)),
+        Language::Xml => false,
+        _ => VOID_ELEMENTS.contains(&name),
     }
 }
 
 pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
-    if matches!(
-        language,
-        Language::Html | Language::Jinja | Language::Django | Language::Vento
-    ) {
-        css_dataset::tags::STANDARD_HTML_TAGS
-            .iter()
-            .any(|tag| tag.eq_ignore_ascii_case(name))
-            || css_dataset::tags::NON_STANDARD_HTML_TAGS
+    match language {
+        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
+            css_dataset::tags::STANDARD_HTML_TAGS
                 .iter()
                 .any(|tag| tag.eq_ignore_ascii_case(name))
-    } else {
-        css_dataset::tags::STANDARD_HTML_TAGS
-            .iter()
-            .any(|tag| *tag == name)
-            || css_dataset::tags::NON_STANDARD_HTML_TAGS
-                .iter()
-                .any(|tag| *tag == name)
+                || css_dataset::tags::NON_STANDARD_HTML_TAGS
+                    .iter()
+                    .any(|tag| tag.eq_ignore_ascii_case(name))
+                || css_dataset::tags::NON_STANDARD_HTML_TAGS
+                    .iter()
+                    .any(|tag| tag.eq_ignore_ascii_case(name))
+        }
+        Language::Xml => false,
+        _ => {
+            css_dataset::tags::STANDARD_HTML_TAGS.contains(&name)
+                || css_dataset::tags::NON_STANDARD_HTML_TAGS.contains(&name)
+        }
     }
 }
 
@@ -154,22 +155,19 @@ pub(crate) fn is_svg_tag(name: &str, language: Language) -> bool {
             .iter()
             .any(|tag| tag.eq_ignore_ascii_case(name))
     } else {
-        css_dataset::tags::SVG_TAGS.iter().any(|tag| *tag == name)
+        css_dataset::tags::SVG_TAGS.contains(&name)
     }
 }
 
 pub(crate) fn is_mathml_tag(name: &str, language: Language) -> bool {
-    if matches!(
-        language,
-        Language::Html | Language::Jinja | Language::Django | Language::Vento
-    ) {
-        css_dataset::tags::MATH_ML_TAGS
-            .iter()
-            .any(|tag| tag.eq_ignore_ascii_case(name))
-    } else {
-        css_dataset::tags::MATH_ML_TAGS
-            .iter()
-            .any(|tag| *tag == name)
+    match language {
+        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
+            css_dataset::tags::MATH_ML_TAGS
+                .iter()
+                .any(|tag| tag.eq_ignore_ascii_case(name))
+        }
+        Language::Xml => false,
+        _ => css_dataset::tags::MATH_ML_TAGS.contains(&name),
     }
 }
 

@@ -104,8 +104,17 @@ pub enum Attribute<'s> {
     JinjaTag(JinjaTag<'s>),
     Native(NativeAttribute<'s>),
     Svelte(SvelteAttribute<'s>),
+    SvelteAttachment(SvelteAttachment<'s>),
     VentoTagOrBlock(NodeKind<'s>),
     VueDirective(VueDirective<'s>),
+}
+
+#[derive(Debug)]
+/// `<![CDATA[ ... ]]>`
+///
+/// See https://www.w3.org/TR/xml/#sec-cdata-sect
+pub struct Cdata<'s> {
+    pub raw: &'s str,
 }
 
 #[derive(Debug)]
@@ -209,6 +218,7 @@ pub enum NodeKind<'s> {
     AngularLet(AngularLet<'s>),
     AngularSwitch(AngularSwitch<'s>),
     AstroExpr(AstroExpr<'s>),
+    Cdata(Cdata<'s>),
     Comment(Comment<'s>),
     Doctype(Doctype<'s>),
     Element(Element<'s>),
@@ -231,6 +241,7 @@ pub enum NodeKind<'s> {
     VentoInterpolation(VentoInterpolation<'s>),
     VentoTag(VentoTag<'s>),
     VueInterpolation(VueInterpolation<'s>),
+    XmlDecl(XmlDecl<'s>),
 }
 
 #[derive(Debug)]
@@ -253,6 +264,14 @@ pub struct SvelteAtTag<'s> {
 /// See https://svelte.dev/docs/svelte/basic-markup#Element-attributes.
 pub struct SvelteAttribute<'s> {
     pub name: Option<&'s str>,
+    pub expr: (&'s str, usize),
+}
+
+#[derive(Debug)]
+/// Svelte attachment: `{@attach expression}`.
+///
+/// See https://svelte.dev/docs/svelte/@attach.
+pub struct SvelteAttachment<'s> {
     pub expr: (&'s str, usize),
 }
 
@@ -415,4 +434,12 @@ pub struct VueDirective<'s> {
 pub struct VueInterpolation<'s> {
     pub expr: &'s str,
     pub start: usize,
+}
+
+#[derive(Debug)]
+/// XML declaration.
+///
+/// See https://www.w3.org/TR/xml/#sec-prolog-dtd
+pub struct XmlDecl<'s> {
+    pub attrs: Vec<NativeAttribute<'s>>,
 }

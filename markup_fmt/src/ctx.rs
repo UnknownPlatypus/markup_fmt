@@ -50,6 +50,7 @@ where
                 .options
                 .astro_script_indent
                 .unwrap_or(self.options.script_indent),
+            Language::Xml => false,
         }
     }
 
@@ -75,6 +76,7 @@ where
                 .options
                 .astro_style_indent
                 .unwrap_or(self.options.style_indent),
+            Language::Xml => false,
         }
     }
 

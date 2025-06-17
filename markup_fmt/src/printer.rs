@@ -273,10 +273,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                     Doc::flat_or_break(Doc::nil(), Doc::text("("))
                         .append(Doc::line_or_nil())
                         .append(format_children_without_inserting_linebreak(
-                            nodes,
-                            has_two_more_non_text_children(nodes, ctx.language),
-                            ctx,
-                            state,
+                            nodes, ctx, state,
                         ))
                         .nest(ctx.indent_width)
                         .append(Doc::line_or_nil())
@@ -328,6 +325,7 @@ impl<'s> DocGen<'s> for Attribute<'s> {
         match self {
             Attribute::Native(native_attribute) => native_attribute.doc(ctx, state),
             Attribute::Svelte(svelte_attribute) => svelte_attribute.doc(ctx, state),
+            Attribute::SvelteAttachment(svelte_attachment) => svelte_attachment.doc(ctx, state),
             Attribute::VueDirective(vue_directive) => vue_directive.doc(ctx, state),
             Attribute::Astro(astro_attribute) => astro_attribute.doc(ctx, state),
             Attribute::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
@@ -335,6 +333,17 @@ impl<'s> DocGen<'s> for Attribute<'s> {
             Attribute::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             Attribute::VentoTagOrBlock(vento_tag_or_block) => vento_tag_or_block.doc(ctx, state),
         }
+    }
+}
+
+impl<'s> DocGen<'s> for Cdata<'s> {
+    fn doc<E, F>(&self, _: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        Doc::text("<![CDATA[")
+            .concat(reflow_raw(self.raw))
+            .append(Doc::text("]]>"))
     }
 }
 
@@ -580,7 +589,15 @@ impl<'s> DocGen<'s> for Element<'s> {
         let has_two_more_non_text_children =
             has_two_more_non_text_children(&self.children, ctx.language);
 
-        let (leading_ws, trailing_ws) = if is_empty {
+        let (leading_ws, trailing_ws) = if is_empty
+            || ctx.language == Language::Xml
+                && matches!(
+                    &*self.children,
+                    [Node {
+                        kind: NodeKind::Text(..),
+                        ..
+                    }]
+                ) {
             (Doc::nil(), Doc::nil())
         } else if is_whitespace_sensitive {
             (
@@ -755,7 +772,6 @@ impl<'s> DocGen<'s> for Element<'s> {
             }
             let children_doc = leading_ws.append(format_children_without_inserting_linebreak(
                 &self.children,
-                has_two_more_non_text_children,
                 ctx,
                 &state,
             ));
@@ -1064,6 +1080,7 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             NodeKind::AngularLet(angular_let) => angular_let.doc(ctx, state),
             NodeKind::AngularSwitch(angular_switch) => angular_switch.doc(ctx, state),
             NodeKind::AstroExpr(astro_expr) => astro_expr.doc(ctx, state),
+            NodeKind::Cdata(cdata) => cdata.doc(ctx, state),
             NodeKind::Comment(comment) => comment.doc(ctx, state),
             NodeKind::Doctype(doctype) => doctype.doc(ctx, state),
             NodeKind::Element(element) => element.doc(ctx, state),
@@ -1094,6 +1111,7 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             }
             NodeKind::VentoTag(vento_tag) => vento_tag.doc(ctx, state),
             NodeKind::VueInterpolation(vue_interpolation) => vue_interpolation.doc(ctx, state),
+            NodeKind::XmlDecl(xml_decl) => xml_decl.doc(ctx, state),
         }
     }
 }
@@ -1127,13 +1145,8 @@ impl<'s> DocGen<'s> for Root<'s> {
             format_children_with_inserting_linebreak(&self.children, ctx, &state)
                 .append(Doc::hard_line())
         } else {
-            format_children_without_inserting_linebreak(
-                &self.children,
-                has_two_more_non_text_children,
-                ctx,
-                state,
-            )
-            .append(Doc::hard_line())
+            format_children_without_inserting_linebreak(&self.children, ctx, state)
+                .append(Doc::hard_line())
         }
     }
 }
@@ -1205,6 +1218,18 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
         } else {
             expr
         }
+    }
+}
+
+impl<'s> DocGen<'s> for SvelteAttachment<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1, state);
+        Doc::text("{@attach ")
+            .concat(reflow_with_indent(&expr_code))
+            .append(Doc::text("}"))
     }
 }
 
@@ -1493,23 +1518,31 @@ impl<'s> DocGen<'s> for SvelteThenBlock<'s> {
 }
 
 impl<'s> DocGen<'s> for TextNode<'s> {
-    fn doc<E, F>(&self, _: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        // for #16
-        Doc::flat_or_break(Doc::text(self.raw.split_ascii_whitespace().join(" ")), {
-            let docs = itertools::intersperse(
-                self.raw.split_ascii_whitespace().map(Doc::text),
-                Doc::soft_line(),
-            )
-            .collect::<Vec<_>>();
-            if docs.is_empty() {
+        if ctx.language == Language::Xml {
+            if self.raw.chars().all(|c| c.is_ascii_whitespace()) {
                 Doc::nil()
             } else {
-                Doc::list(docs)
+                Doc::list(reflow_raw(self.raw).collect())
             }
-        })
+        } else {
+            // for #16
+            Doc::flat_or_break(Doc::text(self.raw.split_ascii_whitespace().join(" ")), {
+                let docs = itertools::intersperse(
+                    self.raw.split_ascii_whitespace().map(Doc::text),
+                    Doc::soft_line(),
+                )
+                .collect::<Vec<_>>();
+                if docs.is_empty() {
+                    Doc::nil()
+                } else {
+                    Doc::list(docs)
+                }
+            })
+        }
     }
 }
 
@@ -1888,6 +1921,23 @@ impl<'s> DocGen<'s> for VueInterpolation<'s> {
     }
 }
 
+impl<'s> DocGen<'s> for XmlDecl<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        Doc::text("<?xml")
+            .concat(
+                self.attrs
+                    .iter()
+                    .flat_map(|attr| [Doc::line_or_space(), attr.doc(ctx, state)].into_iter()),
+            )
+            .nest(ctx.indent_width)
+            .append(Doc::text("?>"))
+            .group()
+    }
+}
+
 fn reflow_raw(s: &str) -> impl Iterator<Item = Doc<'_>> {
     itertools::intersperse(
         s.split('\n')
@@ -2020,6 +2070,7 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
             .unwrap_or(false),
         Attribute::Astro(attr) => attr.expr.0.contains('\n'),
         Attribute::Svelte(attr) => attr.expr.0.contains('\n'),
+        Attribute::SvelteAttachment(attr) => attr.expr.0.contains('\n'),
         Attribute::JinjaComment(comment) => comment.raw.contains('\n'),
         Attribute::JinjaTag(tag) => tag.content.contains('\n'),
         // Templating blocks usually span across multiple lines so let's just assume true.
@@ -2246,7 +2297,6 @@ fn is_text_like(node: &Node, language: Language) -> bool {
 
 fn format_children_without_inserting_linebreak<'s, E, F>(
     children: &[Node<'s>],
-    has_two_more_non_text_children: bool,
     ctx: &mut Ctx<'s, E, F>,
     state: &State<'s>,
 ) -> Doc<'s>
@@ -2257,37 +2307,42 @@ where
         children
             .iter()
             .enumerate()
-            .map(|(i, child)| {
-                if should_ignore_node(i, children, ctx) {
-                    let raw = child.raw.trim_end_matches([' ', '\t']);
-                    let last_line_break_removed = raw.strip_suffix(['\n', '\r']);
-                    let doc =
-                        Doc::list(reflow_raw(last_line_break_removed.unwrap_or(raw)).collect());
-                    if i < children.len() - 1 && last_line_break_removed.is_some() {
-                        doc.append(Doc::hard_line())
+            .fold(
+                (Vec::with_capacity(children.len() * 2), true),
+                |(mut docs, is_prev_text_like), (i, child)| {
+                    if should_ignore_node(i, children, ctx) {
+                        let raw = child.raw.trim_end_matches([' ', '\t']);
+                        let last_line_break_removed = raw.strip_suffix(['\n', '\r']);
+                        docs.extend(reflow_raw(last_line_break_removed.unwrap_or(raw)));
+                        if i < children.len() - 1 && last_line_break_removed.is_some() {
+                            docs.push(Doc::hard_line());
+                        }
                     } else {
-                        doc
-                    }
-                } else {
-                    match &child.kind {
-                        NodeKind::Text(text_node) => {
+                        if let NodeKind::Text(text_node) = &child.kind {
                             let is_first = i == 0;
                             let is_last = i + 1 == children.len();
                             if !is_first && !is_last && is_all_ascii_whitespace(text_node.raw) {
-                                return match text_node.line_breaks {
+                                match text_node.line_breaks {
                                     0 => {
-                                        if has_two_more_non_text_children {
-                                            Doc::hard_line()
+                                        if !is_prev_text_like
+                                            && children.get(i + 1).is_some_and(|next| {
+                                                !is_text_like(next, ctx.language)
+                                            })
+                                        {
+                                            docs.push(Doc::line_or_space());
                                         } else {
-                                            Doc::line_or_space()
+                                            docs.push(Doc::soft_line());
                                         }
                                     }
-                                    1 => Doc::hard_line(),
-                                    _ => Doc::empty_line().append(Doc::hard_line()),
-                                };
+                                    1 => docs.push(Doc::hard_line()),
+                                    _ => {
+                                        docs.push(Doc::empty_line());
+                                        docs.push(Doc::hard_line());
+                                    }
+                                }
+                                return (docs, true);
                             }
 
-                            let mut docs = Vec::with_capacity(3);
                             if let Some(doc) =
                                 should_add_whitespace_before_text_node(text_node, is_first)
                             {
@@ -2299,13 +2354,14 @@ where
                             {
                                 docs.push(doc);
                             }
-                            Doc::list(docs)
+                        } else {
+                            docs.push(child.kind.doc(ctx, state))
                         }
-                        child => child.doc(ctx, state),
                     }
-                }
-            })
-            .collect(),
+                    (docs, is_text_like(child, ctx.language))
+                },
+            )
+            .0,
     )
     .group()
 }
@@ -2440,10 +2496,7 @@ where
         }] if is_all_ascii_whitespace(text_node.raw) => Doc::line_or_space(),
         _ => format_ws_sensitive_leading_ws(children)
             .append(format_children_without_inserting_linebreak(
-                children,
-                has_two_more_non_text_children(children, ctx.language),
-                ctx,
-                state,
+                children, ctx, state,
             ))
             .nest(ctx.indent_width)
             .append(format_ws_sensitive_trailing_ws(children)),

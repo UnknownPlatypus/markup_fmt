@@ -2,7 +2,7 @@
 <h1 align="center">markup_fmt</h1>
 
 <p align="center">
-markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks and Vento formatter.
+markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento and XML formatter.
 </p>
 
 ## Additions in this fork
@@ -30,7 +30,7 @@ This will make ESLint faster because less rules will be executed.
 
 We've provided [dprint](https://dprint.dev/) integration.
 
-This plugin only formats HTML syntax of your HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks and Vento files.
+This plugin only formats HTML syntax of your HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento and XML files.
 You also need other dprint plugins to format the code in `<script>` and `<style>` tags.
 You can use [dprint-plugin-typescript](https://github.com/dprint/dprint-plugin-typescript) to
 format TypeScript/JavaScript code and [Malva](https://github.com/g-plane/malva) to format CSS/SCSS/Sass/Less code.
@@ -65,7 +65,7 @@ After adding the dprint plugins, update your `dprint.json` and add configuration
   // ...
   "plugins": [
     // ... other plugins URL
-    "https://plugins.dprint.dev/g-plane/markup_fmt-v0.20.0.wasm"
+    "https://plugins.dprint.dev/g-plane/markup_fmt-v0.21.0.wasm"
   ],
   "markup": { // <-- the key name here is "markup", not "markup_fmt"
     // config comes here
