@@ -25,6 +25,7 @@ pub enum Language {
     Jinja,
     Django,
     Vento,
+    Mustache,
     Xml,
 }
 
@@ -514,26 +515,38 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_astro_attr(&mut self) -> PResult<AstroAttribute<'s>> {
-        let name = if self.chars.next_if(|(_, c)| *c == '{').is_some() {
-            None
-        } else {
-            let name = self.parse_attr_name()?;
-            self.skip_ws();
-            if self
-                .chars
-                .next_if(|(_, c)| *c == '=')
-                .map(|_| self.skip_ws())
-                .and_then(|_| self.chars.next_if(|(_, c)| *c == '{'))
-                .is_some()
-            {
-                Some(name)
+        let (name, start, first_char) =
+            if let Some((start, first_char)) = self.chars.next_if(|(_, c)| *c == '{') {
+                (None, start, first_char)
             } else {
-                return Err(self.emit_error(SyntaxErrorKind::ExpectAstroAttr));
-            }
-        };
+                let name = self.parse_attr_name()?;
+                self.skip_ws();
+                if let Some((start, first_char)) = self
+                    .chars
+                    .next_if(|(_, c)| *c == '=')
+                    .map(|_| self.skip_ws())
+                    .and_then(|_| self.chars.next_if(|(_, c)| matches!(c, '{' | '`')))
+                {
+                    (Some(name), start, first_char)
+                } else {
+                    return Err(self.emit_error(SyntaxErrorKind::ExpectAstroAttr));
+                }
+            };
 
-        self.parse_svelte_or_astro_expr()
-            .map(|expr| AstroAttribute { name, expr })
+        if first_char == '`' {
+            while self.chars.next_if(|(_, c)| *c != '`').is_some() {}
+            if let Some((end, _)) = self.chars.next_if(|(_, c)| *c == '`') {
+                Ok(AstroAttribute {
+                    name,
+                    expr: unsafe { (self.source.get_unchecked(start..end + 1), start) },
+                })
+            } else {
+                Err(self.emit_error(SyntaxErrorKind::ExpectAstroAttr))
+            }
+        } else {
+            self.parse_svelte_or_astro_expr()
+                .map(|expr| AstroAttribute { name, expr })
+        }
     }
 
     fn parse_astro_expr(&mut self) -> PResult<AstroExpr<'s>> {
@@ -679,7 +692,7 @@ impl<'s> Parser<'s> {
 
     fn parse_attr(&mut self) -> PResult<Attribute<'s>> {
         match self.language {
-            Language::Html | Language::Angular | Language::Xml => {
+            Language::Html | Language::Angular | Language::Mustache | Language::Xml => {
                 self.parse_native_attr().map(Attribute::Native)
             }
             Language::Vue => self
@@ -726,7 +739,7 @@ impl<'s> Parser<'s> {
     fn parse_attr_name(&mut self) -> PResult<&'s str> {
         if matches!(
             self.language,
-            Language::Jinja | Language::Django | Language::Vento
+            Language::Jinja | Language::Django | Language::Vento | Language::Mustache
         ) {
             let Some((start, mut end)) = (match self.chars.peek() {
                 Some((i, '{')) => {
@@ -795,9 +808,9 @@ impl<'s> Parser<'s> {
         let quote = self.chars.next_if(|(_, c)| *c == '"' || *c == '\'');
 
         if let Some((start, quote)) = quote {
-            let is_jinja_or_vento = matches!(
+            let can_interpolate = matches!(
                 self.language,
-                Language::Jinja | Language::Django | Language::Vento
+                Language::Jinja | Language::Django | Language::Vento | Language::Mustache
             );
             let start = start + 1;
             let mut end = start;
@@ -805,7 +818,7 @@ impl<'s> Parser<'s> {
             loop {
                 match self.chars.next() {
                     Some((i, c)) if c == quote => {
-                        if chars_stack.is_empty() || !is_jinja_or_vento {
+                        if chars_stack.is_empty() || !can_interpolate {
                             end = i;
                             break;
                         } else if chars_stack.last().is_some_and(|last| *last == c) {
@@ -814,11 +827,11 @@ impl<'s> Parser<'s> {
                             chars_stack.push(c);
                         }
                     }
-                    Some((_, '{')) if is_jinja_or_vento => {
+                    Some((_, '{')) if can_interpolate => {
                         chars_stack.push('{');
                     }
                     Some((_, '}'))
-                        if is_jinja_or_vento
+                        if can_interpolate
                             && chars_stack.last().is_some_and(|last| *last == '{') =>
                     {
                         chars_stack.pop();
@@ -844,7 +857,10 @@ impl<'s> Parser<'s> {
                     Some((i, '{'))
                         if matches!(
                             self.language,
-                            Language::Jinja | Language::Django | Language::Vento
+                            Language::Jinja
+                                | Language::Django
+                                | Language::Vento
+                                | Language::Mustache
                         ) =>
                     {
                         end = *i;
@@ -1202,7 +1218,7 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some((_, '\n')) => {
-                    if let Some('/') = pair_stack.last() {
+                    if let Some('/' | '\'' | '"') = pair_stack.last() {
                         pair_stack.pop();
                     }
                 }
@@ -1466,6 +1482,40 @@ impl<'s> Parser<'s> {
         }
     }
 
+    fn parse_mustache_block_or_interpolation(&mut self) -> PResult<NodeKind<'s>> {
+        let (content, _) = self.parse_mustache_interpolation()?;
+        if let Some((prefix, rest)) = content
+            .split_at_checked(1)
+            .filter(|(c, _)| matches!(*c, "#" | "^" | "$" | "<"))
+        {
+            let trimmed_rest = rest.trim_ascii();
+            let mut children = vec![];
+            loop {
+                let chars = self.chars.clone();
+                if self
+                    .parse_mustache_interpolation()
+                    .ok()
+                    .and_then(|(content, _)| content.strip_prefix('/'))
+                    .is_some_and(|s| s.trim_ascii() == trimmed_rest)
+                {
+                    break;
+                } else {
+                    self.chars = chars;
+                }
+                children.push(self.parse_node()?);
+            }
+            Ok(NodeKind::MustacheBlock(MustacheBlock {
+                prefix,
+                content: rest,
+                children,
+            }))
+        } else {
+            Ok(NodeKind::MustacheInterpolation(MustacheInterpolation {
+                content,
+            }))
+        }
+    }
+
     fn parse_mustache_interpolation(&mut self) -> PResult<(&'s str, usize)> {
         let Some((start, _)) = self
             .chars
@@ -1541,6 +1591,7 @@ impl<'s> Parser<'s> {
                                 | Language::Jinja
                                 | Language::Django
                                 | Language::Vento
+                                | Language::Mustache
                                 | Language::Xml
                         ) {
                             self.try_parse(Parser::parse_comment)
@@ -1595,6 +1646,9 @@ impl<'s> Parser<'s> {
                     Some((_, '{')) if matches!(self.language, Language::Vento) => {
                         self.parse_vento_tag_or_block(None)
                     }
+                    Some((_, '{')) if matches!(self.language, Language::Mustache) => {
+                        self.parse_mustache_block_or_interpolation()
+                    }
                     Some((_, '#')) if matches!(self.language, Language::Svelte) => {
                         match chars.next() {
                             Some((_, 'i')) => {
@@ -1639,7 +1693,7 @@ impl<'s> Parser<'s> {
             Some((_, '-'))
                 if matches!(
                     self.language,
-                    Language::Astro | Language::Jinja | Language::Vento
+                    Language::Astro | Language::Jinja | Language::Vento | Language::Mustache
                 ) && !self.state.has_front_matter =>
             {
                 let mut chars = self.chars.clone();
@@ -2431,7 +2485,9 @@ impl<'s> Parser<'s> {
                 self.chars.next();
                 (start, start + c.len_utf8())
             }
-            Some((i, '{')) if matches!(self.language, Language::Jinja | Language::Django) => (*i, *i + 1),
+            Some((i, '{')) if matches!(self.language, Language::Jinja | Language::Django) => {
+                (*i, *i + 1)
+            }
             Some((_, '>')) if matches!(self.language, Language::Astro) => {
                 // Astro allows fragment
                 return Ok("");
@@ -2469,6 +2525,7 @@ impl<'s> Parser<'s> {
                     | Language::Jinja
                     | Language::Django
                     | Language::Vento
+                    | Language::Mustache
                     | Language::Angular
             ) {
                 *c != '{'
@@ -2486,6 +2543,7 @@ impl<'s> Parser<'s> {
                 | Language::Django
                 | Language::Vento
                 | Language::Angular
+                | Language::Mustache
         ) && first_char == '{'
             && matches!(self.chars.peek(), Some((_, '{')))
         {
@@ -2500,7 +2558,7 @@ impl<'s> Parser<'s> {
                     Language::Html | Language::Xml => {
                         self.chars.next();
                     }
-                    Language::Vue | Language::Vento | Language::Angular => {
+                    Language::Vue | Language::Vento | Language::Angular | Language::Mustache => {
                         let i = *i;
                         let mut chars = self.chars.clone();
                         chars.next();

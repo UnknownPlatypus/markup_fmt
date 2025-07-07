@@ -88,7 +88,11 @@ static NON_WS_SENSITIVE_TAGS: [&str; 76] = [
 
 pub(crate) fn is_whitespace_sensitive_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => {
             // There's also a tag called "a" in SVG, so we need to check it specially.
             name.eq_ignore_ascii_case("a")
                 || !NON_WS_SENSITIVE_TAGS
@@ -117,7 +121,11 @@ static VOID_ELEMENTS: [&str; 14] = [
 
 pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Django | Language::Vento => VOID_ELEMENTS
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => VOID_ELEMENTS
             .iter()
             .any(|tag| tag.eq_ignore_ascii_case(name)),
         Language::Xml => false,
@@ -127,7 +135,11 @@ pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
 
 pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => {
             css_dataset::tags::STANDARD_HTML_TAGS
                 .iter()
                 .any(|tag| tag.eq_ignore_ascii_case(name))
@@ -149,7 +161,7 @@ pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
 pub(crate) fn is_svg_tag(name: &str, language: Language) -> bool {
     if matches!(
         language,
-        Language::Html | Language::Jinja | Language::Django | Language::Vento
+        Language::Html | Language::Jinja | Language::Django | Language::Vento | Language::Mustache
     ) {
         css_dataset::tags::SVG_TAGS
             .iter()
@@ -161,11 +173,13 @@ pub(crate) fn is_svg_tag(name: &str, language: Language) -> bool {
 
 pub(crate) fn is_mathml_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Django | Language::Vento => {
-            css_dataset::tags::MATH_ML_TAGS
-                .iter()
-                .any(|tag| tag.eq_ignore_ascii_case(name))
-        }
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => css_dataset::tags::MATH_ML_TAGS
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(name)),
         Language::Xml => false,
         _ => css_dataset::tags::MATH_ML_TAGS.contains(&name),
     }
@@ -180,6 +194,20 @@ pub(crate) fn parse_vento_tag(tag: &str) -> (&str, &str) {
 
 pub(crate) static UNESCAPING_AC: LazyLock<AhoCorasick> =
     LazyLock::new(|| AhoCorasick::new(["&quot;", "&#x22;", "&#x27;"]).unwrap());
+
+pub(crate) fn detect_indent(s: &str) -> usize {
+    s.lines()
+        .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            line.as_bytes()
+                .iter()
+                .take_while(|byte| byte.is_ascii_whitespace())
+                .count()
+        })
+        .min()
+        .unwrap_or_default()
+}
 
 /// Checks if the given attribute name content should be space-separated.
 ///

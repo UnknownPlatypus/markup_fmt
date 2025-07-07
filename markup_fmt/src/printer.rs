@@ -292,7 +292,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                     .split(PLACEHOLDER)
                     .map(|script| {
                         if script.contains('\n') {
-                            Doc::list(reflow_owned(script).collect())
+                            Doc::list(reflow_with_indent(script).collect())
                         } else {
                             Doc::text(script.to_string())
                         }
@@ -404,7 +404,11 @@ impl<'s> DocGen<'s> for Element<'s> {
             .unwrap_or(self.tag_name);
         let formatted_tag_name = if matches!(
             ctx.language,
-            Language::Html | Language::Jinja | Language::Django | Language::Vento
+            Language::Html
+                | Language::Jinja
+                | Language::Django
+                | Language::Vento
+                | Language::Mustache
         ) && css_dataset::tags::STANDARD_HTML_TAGS
             .iter()
             .any(|tag| tag.eq_ignore_ascii_case(self.tag_name))
@@ -949,6 +953,65 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
     }
 }
 
+impl<'s> DocGen<'s> for MustacheBlock<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        let content = self.content.trim_ascii();
+        Doc::text("{{")
+            .append(Doc::text(self.prefix))
+            .concat(reflow_raw(content))
+            .nest(ctx.indent_width)
+            .append(Doc::line_or_nil())
+            .append(Doc::text("}}"))
+            .group()
+            .append(format_control_structure_block_children(
+                &self.children,
+                ctx,
+                state,
+            ))
+            .group()
+            .append(
+                Doc::text("{{/")
+                    .concat(reflow_raw(content))
+                    .append(Doc::line_or_nil())
+                    .append(Doc::text("}}"))
+                    .group(),
+            )
+    }
+}
+
+impl<'s> DocGen<'s> for MustacheInterpolation<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        if self.content.starts_with('!') {
+            Doc::text("{{")
+                .concat(reflow_raw(self.content))
+                .append(Doc::text("}}"))
+        } else {
+            let content = if let Some(content) = self
+                .content
+                .strip_prefix('{')
+                .and_then(|s| s.strip_suffix('}'))
+            {
+                Cow::from(format!("{{{}}}", content.trim()))
+            } else {
+                Cow::from(self.content.trim())
+            };
+            Doc::text("{{")
+                .append(Doc::line_or_nil())
+                .concat(reflow_owned(&content))
+                .nest(ctx.indent_width)
+                .append(Doc::line_or_nil())
+                .append(Doc::text("}}"))
+                .group()
+        }
+    }
+}
+
 impl<'s> DocGen<'s> for NativeAttribute<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
     where
@@ -1091,6 +1154,10 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
                 jinja_interpolation.doc(ctx, state)
             }
             NodeKind::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
+            NodeKind::MustacheBlock(mustache_block) => mustache_block.doc(ctx, state),
+            NodeKind::MustacheInterpolation(mustache_interpolation) => {
+                mustache_interpolation.doc(ctx, state)
+            }
             NodeKind::SvelteAtTag(svelte_at_tag) => svelte_at_tag.doc(ctx, state),
             NodeKind::SvelteAwaitBlock(svelte_await_block) => svelte_await_block.doc(ctx, state),
             NodeKind::SvelteEachBlock(svelte_each_block) => svelte_each_block.doc(ctx, state),
@@ -1955,18 +2022,7 @@ fn reflow_owned<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
 }
 
 fn reflow_with_indent<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let indent = s
-        .lines()
-        .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            line.as_bytes()
-                .iter()
-                .take_while(|byte| byte.is_ascii_whitespace())
-                .count()
-        })
-        .min()
-        .unwrap_or_default();
+    let indent = helpers::detect_indent(s);
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
@@ -2062,17 +2118,19 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
         Attribute::Native(attr) if attr.name.eq_ignore_ascii_case("style") => false,
         Attribute::Native(attr) => attr
             .value
-            .map(|(value, _)| value.trim().contains('\n'))
-            .unwrap_or(false),
-        Attribute::VueDirective(attr) => attr
-            .value
-            .map(|(value, _)| value.contains('\n'))
-            .unwrap_or(false),
-        Attribute::Astro(attr) => attr.expr.0.contains('\n'),
-        Attribute::Svelte(attr) => attr.expr.0.contains('\n'),
-        Attribute::SvelteAttachment(attr) => attr.expr.0.contains('\n'),
-        Attribute::JinjaComment(comment) => comment.raw.contains('\n'),
-        Attribute::JinjaTag(tag) => tag.content.contains('\n'),
+            .is_some_and(|(value, _)| value.trim().contains('\n')),
+        Attribute::VueDirective(attr) => attr.value.is_some_and(|(value, _)| value.contains('\n')),
+        Attribute::Astro(AstroAttribute {
+            expr: (value, ..), ..
+        })
+        | Attribute::Svelte(SvelteAttribute {
+            expr: (value, ..), ..
+        })
+        | Attribute::SvelteAttachment(SvelteAttachment {
+            expr: (value, ..), ..
+        })
+        | Attribute::JinjaComment(JinjaOrDjangoComment { raw: value, .. })
+        | Attribute::JinjaTag(JinjaTag { content: value, .. }) => value.contains('\n'),
         // Templating blocks usually span across multiple lines so let's just assume true.
         Attribute::JinjaBlock(..) | Attribute::VentoTagOrBlock(..) => true,
     }
@@ -2317,46 +2375,43 @@ where
                         if i < children.len() - 1 && last_line_break_removed.is_some() {
                             docs.push(Doc::hard_line());
                         }
-                    } else {
-                        if let NodeKind::Text(text_node) = &child.kind {
-                            let is_first = i == 0;
-                            let is_last = i + 1 == children.len();
-                            if !is_first && !is_last && is_all_ascii_whitespace(text_node.raw) {
-                                match text_node.line_breaks {
-                                    0 => {
-                                        if !is_prev_text_like
-                                            && children.get(i + 1).is_some_and(|next| {
-                                                !is_text_like(next, ctx.language)
-                                            })
-                                        {
-                                            docs.push(Doc::line_or_space());
-                                        } else {
-                                            docs.push(Doc::soft_line());
-                                        }
-                                    }
-                                    1 => docs.push(Doc::hard_line()),
-                                    _ => {
-                                        docs.push(Doc::empty_line());
-                                        docs.push(Doc::hard_line());
+                    } else if let NodeKind::Text(text_node) = &child.kind {
+                        let is_first = i == 0;
+                        let is_last = i + 1 == children.len();
+                        if !is_first && !is_last && is_all_ascii_whitespace(text_node.raw) {
+                            match text_node.line_breaks {
+                                0 => {
+                                    if !is_prev_text_like
+                                        && children
+                                            .get(i + 1)
+                                            .is_some_and(|next| !is_text_like(next, ctx.language))
+                                    {
+                                        docs.push(Doc::line_or_space());
+                                    } else {
+                                        docs.push(Doc::soft_line());
                                     }
                                 }
-                                return (docs, true);
+                                1 => docs.push(Doc::hard_line()),
+                                _ => {
+                                    docs.push(Doc::empty_line());
+                                    docs.push(Doc::hard_line());
+                                }
                             }
-
-                            if let Some(doc) =
-                                should_add_whitespace_before_text_node(text_node, is_first)
-                            {
-                                docs.push(doc);
-                            }
-                            docs.push(text_node.doc(ctx, state));
-                            if let Some(doc) =
-                                should_add_whitespace_after_text_node(text_node, is_last)
-                            {
-                                docs.push(doc);
-                            }
-                        } else {
-                            docs.push(child.kind.doc(ctx, state))
+                            return (docs, true);
                         }
+
+                        if let Some(doc) =
+                            should_add_whitespace_before_text_node(text_node, is_first)
+                        {
+                            docs.push(doc);
+                        }
+                        docs.push(text_node.doc(ctx, state));
+                        if let Some(doc) = should_add_whitespace_after_text_node(text_node, is_last)
+                        {
+                            docs.push(doc);
+                        }
+                    } else {
+                        docs.push(child.kind.doc(ctx, state))
                     }
                     (docs, is_text_like(child, ctx.language))
                 },

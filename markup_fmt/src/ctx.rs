@@ -34,7 +34,8 @@ where
             | Language::Jinja
             | Language::Django
             | Language::Vento
-            | Language::Angular => self
+            | Language::Angular
+            | Language::Mustache => self
                 .options
                 .html_script_indent
                 .unwrap_or(self.options.script_indent),
@@ -60,7 +61,8 @@ where
             | Language::Jinja
             | Language::Django
             | Language::Vento
-            | Language::Angular => self
+            | Language::Angular
+            | Language::Mustache => self
                 .options
                 .html_style_indent
                 .unwrap_or(self.options.style_indent),
@@ -175,15 +177,52 @@ where
             let formatted = formatted
                 .strip_prefix("<>")
                 .and_then(|s| s.strip_suffix("</>"))
-                .unwrap_or(formatted)
-                .trim();
-            Ok(formatted
-                .strip_prefix('{')
-                .and_then(|s| s.strip_suffix('}'))
-                .unwrap_or(formatted)
-                .trim_start()
-                .trim_end_matches(|c: char| c.is_ascii_whitespace() || c == ';')
-                .to_owned())
+                .unwrap_or(formatted);
+            // The condition below detects these cases:
+            // 1. Language is not Astro
+            // 2. There's a line break after `{`
+            //    ```
+            //    {
+            //        /*
+            //        */
+            //    }
+            //    ```
+            // 3. The indentation level of inner content is less than that of `{`
+            //    ```
+            //        {/*
+            //    Hello
+            //    */}
+            //    ```
+            let formatted = if self.language != Language::Astro
+                || formatted
+                    .trim_ascii_start()
+                    .strip_prefix('{')
+                    .is_some_and(|s| s.starts_with(['\n', '\r']))
+                || formatted
+                    .trim_start_matches(['\n', '\r'])
+                    .find('{')
+                    .is_some_and(|index| {
+                        helpers::detect_indent(formatted.trim_start_matches(['\n', '\r'])) < index
+                    }) {
+                formatted
+                    .trim_ascii()
+                    .strip_prefix('{')
+                    .and_then(|s| s.strip_suffix('}'))
+                    .unwrap_or(formatted)
+                    .trim_ascii_start()
+                    .trim_matches(|c: char| c.is_ascii_whitespace() || c == ';')
+                    .to_owned()
+            } else {
+                formatted
+                    .replacen('{', "", 1)
+                    .trim_ascii_end()
+                    .strip_suffix('}')
+                    .unwrap_or(formatted)
+                    .trim_start_matches(['\n', '\r'])
+                    .trim_end_matches(|c: char| c.is_ascii_whitespace() || c == ';')
+                    .to_owned()
+            };
+            Ok(formatted)
         }
     }
 
