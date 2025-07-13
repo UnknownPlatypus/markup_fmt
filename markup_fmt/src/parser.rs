@@ -1372,6 +1372,7 @@ impl<'s> Parser<'s> {
 
         Ok(JinjaTag {
             content: unsafe { self.source.get_unchecked(start..end) },
+            start,
         })
     }
 
@@ -1630,7 +1631,7 @@ impl<'s> Parser<'s> {
                                 }
                                 Language::Jinja | Language::Django => {
                                     NodeKind::JinjaOrDjangoInterpolation(
-                                        JinjaOrDjangoInterpolation { expr },
+                                        JinjaOrDjangoInterpolation { expr, start },
                                     )
                                 }
                                 Language::Angular => {
