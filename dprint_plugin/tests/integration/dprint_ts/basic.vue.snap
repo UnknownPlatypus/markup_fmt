@@ -1,7 +1,17 @@
 ---
 source: dprint_plugin/tests/integration.rs
 ---
-<script setup lang="ts" generic="T extends string">
+<script
+  setup
+  lang="ts"
+  generic="T extends z.ZodObject<
+    {
+      [key: string]:
+        | z.ZodString
+        | z.ZodOptional<z.ZodString>;
+    }
+  >"
+>
 const props = defineProps<{ name: T }>();
 
 function greet(msg: string) {
@@ -25,18 +35,14 @@ function greet(msg: string) {
   <button @click="e => console.log(e)"></button>
   <button :class="" @click="">{{  }}{{ /**/ }}</button>
   <v-list-item
-    @click='
-      $triggerDialog("editScreen", { screenId: screen.id });
-      close();
-    '
+    @click="$triggerDialog('editScreen', { screenId: screen.id });
+    close()"
   />
   <div
-    :style="
-      {
-        'height': '200px',
-        /* position: relative; */
-      }
-    "
+    :style="{
+      'height': '200px',
+      /* position: relative; */
+    }"
   >
   </div>
 </template>

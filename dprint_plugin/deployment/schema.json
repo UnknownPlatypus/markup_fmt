@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://plugins.dprint.dev/g-plane/markup_fmt/v0.22.0/schema.json",
+  "$id": "https://plugins.dprint.dev/g-plane/markup_fmt/v0.25.0/schema.json",
   "title": "Config",
   "description": "Configuration for dprint-plugin-markup.",
   "type": "object",
@@ -327,6 +327,25 @@
       "type": ["boolean", "null"],
       "default": null
     },
+    "vueComponentCase": {
+      "description": "Control the component naming style in template.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "ignore",
+          "description": "Component names will not be changed."
+        },
+        {
+          "const": "pascalCase",
+          "description": "Component names will be converted to PascalCase."
+        },
+        {
+          "const": "kebabCase",
+          "description": "Component names will be converted to kebab-case."
+        }
+      ],
+      "default": "ignore"
+    },
     "strictSvelteAttr": {
       "description": "Control whether Svelte attribute value should be in strict mode or not.",
       "type": "boolean",
@@ -346,6 +365,11 @@
       "description": "Control whether Astro attribute should be written in short-hand form or not when possible.",
       "type": ["boolean", "null"],
       "default": null
+    },
+    "angularNextControlFlowSameLine": {
+      "description": "Control whether the next Angular control flow code should be on the same line with previous `}` or not.",
+      "type": "boolean",
+      "default": true
     },
     "scriptFormatter": {
       "description": "Tell markup_fmt what script formatter you are using.",

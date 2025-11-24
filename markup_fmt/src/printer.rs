@@ -1,13 +1,14 @@
 use crate::helpers::should_be_space_separated;
 use crate::{
+    Language,
     ast::*,
-    config::{Quotes, ScriptFormatter, VSlotStyle, WhitespaceSensitivity},
+    config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
     helpers,
+    parser::parse_as_interpolated,
     state::State,
-    Language,
 };
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use std::borrow::Cow;
 use tiny_pretty::Doc;
 
@@ -24,15 +25,10 @@ impl<'s> DocGen<'s> for AngularElseIf<'s> {
     {
         let mut docs = Vec::with_capacity(5);
         docs.push(Doc::text("@else if ("));
-        docs.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
-            state,
-        )));
+        docs.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
         if let Some((reference, start)) = self.reference {
             docs.push(Doc::text("; as "));
-            docs.push(Doc::text(ctx.format_binding(reference, start, state)));
+            docs.push(Doc::text(ctx.format_binding(reference, start)));
         }
         docs.push(Doc::text(") {"));
         docs.push(format_control_structure_block_children(
@@ -52,21 +48,14 @@ impl<'s> DocGen<'s> for AngularFor<'s> {
     {
         let mut docs = Vec::with_capacity(5);
         docs.push(Doc::text("@for ("));
-        docs.push(Doc::text(ctx.format_binding(
-            self.binding.0,
-            self.binding.1,
-            state,
-        )));
+        docs.push(Doc::text(
+            ctx.format_binding(self.binding.0, self.binding.1),
+        ));
         docs.push(Doc::text(" of "));
-        docs.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
-            state,
-        )));
+        docs.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
         if let Some((track, start)) = self.track {
             docs.push(Doc::text("; track "));
-            docs.push(Doc::text(ctx.format_expr(track, false, start, state)));
+            docs.push(Doc::text(ctx.format_expr(track, false, start)));
         }
         self.aliases.iter().for_each(|(aliases, start)| {
             docs.push(Doc::text("; "));
@@ -74,6 +63,7 @@ impl<'s> DocGen<'s> for AngularFor<'s> {
                 ctx.format_script(aliases, "js", *start, state)
                     .trim()
                     .trim_end_matches(';'),
+                true,
             ));
         });
         docs.push(Doc::text(") {"));
@@ -96,22 +86,66 @@ impl<'s> DocGen<'s> for AngularFor<'s> {
     }
 }
 
-impl<'s> DocGen<'s> for AngularIf<'s> {
+impl<'s> DocGen<'s> for AngularGenericBlock<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         let mut docs = Vec::with_capacity(5);
-        docs.push(Doc::text("@if ("));
-        docs.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
+        docs.push(Doc::text("@"));
+        docs.push(Doc::text(self.keyword));
+        if let Some(header) = self.header {
+            docs.push(Doc::space());
+            docs.push(Doc::text(header));
+        }
+        docs.push(Doc::text(" {"));
+        docs.push(format_control_structure_block_children(
+            &self.children,
+            ctx,
             state,
-        )));
+        ));
+        docs.push(Doc::text("}"));
+        Doc::list(docs)
+    }
+}
+
+impl<'s> DocGen<'s> for Vec<AngularGenericBlock<'s>> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        let next_block_ws = if ctx.options.angular_next_control_flow_same_line {
+            Doc::space()
+        } else {
+            Doc::hard_line()
+        };
+        Doc::list(
+            itertools::intersperse(
+                self.iter().map(|block| block.doc(ctx, state)),
+                next_block_ws,
+            )
+            .collect(),
+        )
+    }
+}
+
+impl<'s> DocGen<'s> for AngularIf<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        let next_cf_ws = if ctx.options.angular_next_control_flow_same_line {
+            Doc::space()
+        } else {
+            Doc::hard_line()
+        };
+
+        let mut docs = Vec::with_capacity(5);
+        docs.push(Doc::text("@if ("));
+        docs.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
         if let Some((reference, start)) = self.reference {
             docs.push(Doc::text("; as "));
-            docs.push(Doc::text(ctx.format_binding(reference, start, state)));
+            docs.push(Doc::text(ctx.format_binding(reference, start)));
         }
         docs.push(Doc::text(") {"));
         docs.push(format_control_structure_block_children(
@@ -124,11 +158,12 @@ impl<'s> DocGen<'s> for AngularIf<'s> {
         docs.extend(
             self.else_if_blocks
                 .iter()
-                .flat_map(|block| [Doc::space(), block.doc(ctx, state)]),
+                .flat_map(|block| [next_cf_ws.clone(), block.doc(ctx, state)]),
         );
 
         if let Some(children) = &self.else_children {
-            docs.push(Doc::text(" @else {"));
+            docs.push(next_cf_ws);
+            docs.push(Doc::text("@else {"));
             docs.push(format_control_structure_block_children(
                 children, ctx, state,
             ));
@@ -140,14 +175,15 @@ impl<'s> DocGen<'s> for AngularIf<'s> {
 }
 
 impl<'s> DocGen<'s> for AngularInterpolation<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{{")
             .append(Doc::line_or_space())
             .concat(reflow_with_indent(
-                &ctx.format_expr(self.expr, false, self.start, state),
+                &ctx.format_expr(self.expr, false, self.start),
+                true,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -157,19 +193,14 @@ impl<'s> DocGen<'s> for AngularInterpolation<'s> {
 }
 
 impl<'s> DocGen<'s> for AngularLet<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("@let ")
             .append(Doc::text(self.name))
             .append(Doc::text(" = "))
-            .append(Doc::text(ctx.format_expr(
-                self.expr.0,
-                false,
-                self.expr.1,
-                state,
-            )))
+            .append(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)))
             .append(Doc::text(";"))
     }
 }
@@ -181,12 +212,7 @@ impl<'s> DocGen<'s> for AngularSwitch<'s> {
     {
         let mut docs = Vec::with_capacity(5);
         docs.push(Doc::text("@switch ("));
-        docs.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
-            state,
-        )));
+        docs.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
         docs.push(Doc::text(") {"));
         docs.extend(
             self.arms
@@ -209,7 +235,7 @@ impl<'s> DocGen<'s> for AngularSwitchArm<'s> {
         docs.push(Doc::text(format!("@{}", self.keyword)));
         if let Some(expr) = self.expr {
             docs.push(Doc::text(" ("));
-            docs.push(Doc::text(ctx.format_expr(expr.0, false, expr.1, state)));
+            docs.push(Doc::text(ctx.format_expr(expr.0, false, expr.1)));
             docs.push(Doc::text(")"));
         }
         docs.push(Doc::text(" {"));
@@ -224,13 +250,13 @@ impl<'s> DocGen<'s> for AngularSwitchArm<'s> {
 }
 
 impl<'s> DocGen<'s> for AstroAttribute<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1, state);
+        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         let expr = Doc::text("{")
-            .concat(reflow_with_indent(&expr_code))
+            .concat(reflow_with_indent(&expr_code, true))
             .append(Doc::text("}"));
         if let Some(name) = self.name {
             if (matches!(ctx.options.astro_attr_shorthand, Some(true))) && name == expr_code {
@@ -253,6 +279,8 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
+        let indent_width = ctx.indent_width;
+
         const PLACEHOLDER: &str = "$AstroTpl$";
         let script = self
             .children
@@ -265,55 +293,62 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                 }
             })
             .join(PLACEHOLDER);
-        let formatted_script = ctx.format_expr(&script, false, self.start, state);
+        let formatted_script = ctx.format_expr(&script, false, self.start);
 
         let templates = self.children.iter().filter_map(|child| {
             if let AstroExprChild::Template(nodes) = child {
-                Some(
-                    Doc::flat_or_break(Doc::nil(), Doc::text("("))
-                        .append(Doc::line_or_nil())
-                        .append(format_children_without_inserting_linebreak(
-                            nodes, ctx, state,
-                        ))
-                        .nest(ctx.indent_width)
-                        .append(Doc::line_or_nil())
-                        .append(Doc::flat_or_break(Doc::nil(), Doc::text(")")))
-                        .group(),
-                )
+                Some(format_children_without_inserting_linebreak(
+                    nodes, ctx, state,
+                ))
             } else {
                 None
             }
         });
 
-        Doc::text("{")
-            .append(Doc::line_or_nil())
-            .concat(
-                formatted_script
-                    .split(PLACEHOLDER)
-                    .map(|script| {
-                        if script.contains('\n') {
-                            Doc::list(reflow_with_indent(script).collect())
-                        } else {
-                            Doc::text(script.to_string())
-                        }
-                    })
-                    .interleave(templates),
-            )
-            .nest(ctx.indent_width)
-            .append(
-                if self.has_line_comment
-                    || formatted_script
-                        .lines()
-                        .next_back()
-                        .is_some_and(|line| line.starts_with([' ', '\t']))
-                {
-                    Doc::hard_line()
-                } else {
-                    Doc::line_or_nil()
-                },
-            )
-            .append(Doc::text("}"))
-            .group()
+        let mut docs = Vec::with_capacity(self.children.len() + 3);
+        docs.push(Doc::text("{"));
+        formatted_script
+            .split(PLACEHOLDER)
+            .zip_longest(templates)
+            .for_each(|either| match either {
+                EitherOrBoth::Both(script, template) => {
+                    let extra_indent = script.split('\n').next_back().map_or(0, |line| {
+                        line.chars().take_while(|c| c.is_ascii_whitespace()).count()
+                    });
+                    if script.contains('\n') {
+                        docs.extend(reflow_with_indent(script, false));
+                    } else {
+                        docs.push(Doc::text(script.to_string()));
+                    }
+                    if script.trim_end().ends_with('(') {
+                        docs.push(template.nest(extra_indent));
+                    } else {
+                        docs.push(
+                            Doc::flat_or_break(Doc::nil(), Doc::text("("))
+                                .append(Doc::line_or_nil())
+                                .append(template)
+                                .nest(indent_width)
+                                .append(Doc::line_or_nil())
+                                .append(Doc::flat_or_break(Doc::nil(), Doc::text(")")))
+                                .group()
+                                .nest(extra_indent),
+                        );
+                    }
+                }
+                EitherOrBoth::Left(script) => {
+                    if script.contains('\n') {
+                        docs.extend(reflow_with_indent(script, false));
+                    } else {
+                        docs.push(Doc::text(script.to_string()));
+                    }
+                }
+                EitherOrBoth::Right(..) => {}
+            });
+        if self.has_line_comment {
+            docs.push(Doc::hard_line());
+        }
+        docs.push(Doc::text("}"));
+        Doc::list(docs)
     }
 }
 
@@ -355,7 +390,7 @@ impl<'s> DocGen<'s> for Comment<'s> {
         if ctx.options.format_comments {
             Doc::text("<!--")
                 .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim()))
+                .concat(reflow_with_indent(self.raw.trim(), true))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("-->"))
@@ -396,26 +431,35 @@ impl<'s> DocGen<'s> for Element<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let parent_tag_name = state.current_tag_name;
         let tag_name = self
             .tag_name
             .split_once(':')
             .and_then(|(namespace, name)| namespace.eq_ignore_ascii_case("html").then_some(name))
             .unwrap_or(self.tag_name);
-        let formatted_tag_name = if matches!(
-            ctx.language,
+        let formatted_tag_name = match ctx.language {
             Language::Html
-                | Language::Jinja
-                | Language::Django
-                | Language::Vento
-                | Language::Mustache
-        ) && css_dataset::tags::STANDARD_HTML_TAGS
-            .iter()
-            .any(|tag| tag.eq_ignore_ascii_case(self.tag_name))
-        {
-            Cow::from(self.tag_name.to_ascii_lowercase())
-        } else {
-            Cow::from(self.tag_name)
+            | Language::Jinja
+            | Language::Django
+            | Language::Vento
+            | Language::Mustache
+                if css_dataset::tags::STANDARD_HTML_TAGS
+                    .iter()
+                    .any(|tag| tag.eq_ignore_ascii_case(self.tag_name)) =>
+            {
+                Cow::from(self.tag_name.to_ascii_lowercase())
+            }
+            Language::Vue
+                if !css_dataset::tags::SVG_TAGS
+                    .iter()
+                    .any(|tag| tag.eq_ignore_ascii_case(self.tag_name)) =>
+            {
+                match ctx.options.vue_component_case {
+                    VueComponentCase::Ignore => Cow::from(self.tag_name),
+                    VueComponentCase::PascalCase => helpers::kebab2pascal(self.tag_name),
+                    VueComponentCase::KebabCase => helpers::pascal2kebab(self.tag_name),
+                }
+            }
+            _ => Cow::from(self.tag_name),
         };
         let is_root = state.is_root;
         let mut state = State {
@@ -617,124 +661,150 @@ impl<'s> DocGen<'s> for Element<'s> {
             )
         };
 
-        if tag_name.eq_ignore_ascii_case("script") {
-            if let [Node {
-                kind: NodeKind::Text(text_node),
-                ..
-            }] = &self.children[..]
-            {
-                if text_node.raw.chars().all(|c| c.is_ascii_whitespace()) {
-                    docs.push(Doc::hard_line());
-                } else {
-                    let is_json = self.attrs.iter().any(|attr| {
-                        if let Attribute::Native(native_attr) = attr {
-                            native_attr.name.eq_ignore_ascii_case("type")
-                                && native_attr
-                                    .value
-                                    .map(|(value, _)| {
-                                        value == "importmap"
-                                            || value == "application/json"
-                                            || value == "application/ld+json"
-                                    })
-                                    .unwrap_or_default()
-                        } else {
-                            false
-                        }
-                    });
-                    let is_script_indent = ctx.script_indent();
-                    let formatted = if is_json {
-                        ctx.format_json(text_node.raw, text_node.start, &state)
-                    } else {
-                        if is_script_indent && parent_tag_name.is_none() {
-                            state.indent_level += 1;
-                        }
-                        ctx.format_script(
-                            text_node.raw,
-                            self.attrs
-                                .iter()
-                                .find_map(|attr| match attr {
-                                    Attribute::Native(native_attribute)
-                                        if native_attribute.name.eq_ignore_ascii_case("lang") =>
-                                    {
-                                        native_attribute.value.map(|(value, _)| value)
-                                    }
-                                    _ => None,
-                                })
-                                .unwrap_or(if matches!(ctx.language, Language::Astro) {
-                                    "ts"
-                                } else {
-                                    "js"
-                                }),
-                            text_node.start,
-                            &state,
-                        )
-                    };
-                    let doc = if !is_json
-                        && matches!(ctx.options.script_formatter, Some(ScriptFormatter::Dprint))
-                    {
-                        Doc::hard_line().concat(reflow_owned(formatted.trim()))
-                    } else {
-                        Doc::hard_line().concat(reflow_with_indent(formatted.trim()))
-                    };
-                    docs.push(
-                        if is_script_indent {
-                            doc.nest(ctx.indent_width)
-                        } else {
-                            doc
-                        }
-                        .append(Doc::hard_line()),
-                    );
-                }
-            }
-        } else if tag_name.eq_ignore_ascii_case("style") {
-            if let [Node {
-                kind: NodeKind::Text(text_node),
-                ..
-            }] = &self.children[..]
-            {
-                if text_node.raw.chars().all(|c| c.is_ascii_whitespace()) {
-                    docs.push(Doc::hard_line());
-                } else {
-                    let formatted = ctx.format_style(
-                        text_node.raw,
-                        self.attrs
-                            .iter()
-                            .find_map(|attr| match attr {
-                                Attribute::Native(native_attribute)
-                                    if native_attribute.name.eq_ignore_ascii_case("lang") =>
-                                {
-                                    native_attribute.value.map(|(value, _)| value)
-                                }
-                                _ => None,
+        if tag_name.eq_ignore_ascii_case("script")
+            && let [
+                Node {
+                    kind: NodeKind::Text(text_node),
+                    ..
+                },
+            ] = &self.children[..]
+        {
+            if text_node.raw.chars().all(|c| c.is_ascii_whitespace()) {
+                docs.push(Doc::hard_line());
+            } else {
+                let is_json = self.attrs.iter().any(|attr| {
+                    if let Attribute::Native(native_attr) = attr {
+                        native_attr.name.eq_ignore_ascii_case("type")
+                            && native_attr.value.is_some_and(|(value, _)| {
+                                value == "importmap"
+                                    || value == "application/json"
+                                    || value == "application/ld+json"
                             })
-                            .unwrap_or("css"),
-                        text_node.start,
-                        &state,
-                    );
-                    let doc = Doc::hard_line().concat(reflow_with_indent(formatted.trim()));
-                    docs.push(
-                        if ctx.style_indent() {
-                            doc.nest(ctx.indent_width)
+                    } else {
+                        false
+                    }
+                });
+                let is_script_indent = ctx.script_indent();
+                let formatted = if is_json {
+                    ctx.format_json(text_node.raw, text_node.start, &state)
+                } else {
+                    if is_script_indent {
+                        state.indent_level += 1;
+                    }
+                    let lang = self
+                        .attrs
+                        .iter()
+                        .find_map(|attr| match attr {
+                            Attribute::Native(native)
+                                if native.name.eq_ignore_ascii_case("lang") =>
+                            {
+                                native.value.map(|(value, _)| value)
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or(if matches!(ctx.language, Language::Astro) {
+                            "ts"
                         } else {
-                            doc
+                            "js"
+                        });
+                    let lang = if self.attrs.iter().any(|attr| match attr {
+                        Attribute::Native(native) if native.name.eq_ignore_ascii_case("type") => {
+                            native.value.is_some_and(|(value, _)| value == "module")
                         }
-                        .append(Doc::hard_line()),
-                    );
-                }
+                        _ => false,
+                    }) {
+                        match lang {
+                            "ts" => "mts",
+                            "js" => "mjs",
+                            lang => lang,
+                        }
+                    } else {
+                        lang
+                    };
+                    ctx.format_script(text_node.raw, lang, text_node.start, &state)
+                };
+                let doc = if !is_json
+                    && matches!(ctx.options.script_formatter, Some(ScriptFormatter::Dprint))
+                {
+                    Doc::hard_line().concat(reflow_owned(formatted.trim()))
+                } else {
+                    Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true))
+                };
+                docs.push(
+                    if is_script_indent {
+                        doc.nest(ctx.indent_width)
+                    } else {
+                        doc
+                    }
+                    .append(Doc::hard_line()),
+                );
+            }
+        } else if tag_name.eq_ignore_ascii_case("style")
+            && let [
+                Node {
+                    kind: NodeKind::Text(text_node),
+                    ..
+                },
+            ] = &self.children[..]
+        {
+            if text_node.raw.chars().all(|c| c.is_ascii_whitespace()) {
+                docs.push(Doc::hard_line());
+            } else {
+                let lang = self
+                    .attrs
+                    .iter()
+                    .find_map(|attr| match attr {
+                        Attribute::Native(native_attribute)
+                            if native_attribute.name.eq_ignore_ascii_case("lang") =>
+                        {
+                            native_attribute.value.map(|(value, _)| value)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or("css");
+                let (statics, dynamics) =
+                    parse_as_interpolated(text_node.raw, text_node.start, ctx.language, false);
+                const PLACEHOLDER: &str = "_saya0909_";
+                let masked = statics.join(PLACEHOLDER);
+                let formatted = ctx.format_style(&masked, lang, text_node.start, &state);
+                let doc = Doc::hard_line().concat(reflow_with_indent(
+                    formatted
+                        .split(PLACEHOLDER)
+                        .map(Cow::from)
+                        .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
+                            Language::Jinja | Language::Django => Cow::from(format!(
+                                "{{{{ {} }}}}",
+                                ctx.format_jinja(expr, *start, true, &state),
+                            )),
+                            Language::Vento => Cow::from(format!(
+                                "{{{{ {} }}}}",
+                                ctx.format_expr(expr, false, *start),
+                            )),
+                            Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                            _ => unreachable!(),
+                        }))
+                        .collect::<String>()
+                        .trim(),
+                    lang != "sass",
+                ));
+                docs.push(
+                    if ctx.style_indent() {
+                        doc.nest(ctx.indent_width)
+                    } else {
+                        doc
+                    }
+                    .append(Doc::hard_line()),
+                );
             }
         } else if tag_name.eq_ignore_ascii_case("pre") || tag_name.eq_ignore_ascii_case("textarea")
         {
-            if let [Node {
-                kind: NodeKind::Text(text_node),
-                ..
-            }] = &self.children[..]
+            if let [
+                Node {
+                    kind: NodeKind::Text(text_node),
+                    ..
+                },
+            ] = &self.children[..]
             {
-                if text_node.raw.contains('\n')
-                    && !text_node.raw.starts_with('\n')
-                    && !text_node.raw.starts_with("\r\n")
-                {
-                    docs.push(Doc::empty_line());
-                }
                 docs.extend(reflow_raw(text_node.raw));
             }
         } else if is_empty {
@@ -767,7 +837,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                             | NodeKind::SvelteInterpolation(..)
                             | NodeKind::Comment(..)
                             | NodeKind::AstroExpr(..)
-                            | NodeKind::JinjaOrDjangoInterpolation(..)
+                            | NodeKind::JinjaInterpolation(..)
                             | NodeKind::VentoInterpolation(..)
                     )
                 });
@@ -808,7 +878,7 @@ impl<'s> DocGen<'s> for FrontMatter<'s> {
             let formatted = ctx.format_script(self.raw, "tsx", self.start, state);
             Doc::text("---")
                 .append(Doc::hard_line())
-                .concat(reflow_with_indent(formatted.trim()))
+                .concat(reflow_with_indent(formatted.trim(), true))
                 .append(Doc::hard_line())
                 .append(Doc::text("---"))
         } else {
@@ -861,7 +931,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
+impl<'s> DocGen<'s> for JinjaComment<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
@@ -870,7 +940,7 @@ impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
             match ctx.language {
                 Language::Jinja => Doc::text("{#")
                     .append(Doc::line_or_space())
-                    .concat(reflow_with_indent(self.raw.trim()))
+                    .concat(reflow_with_indent(self.raw.trim(), true))
                     .nest(ctx.indent_width)
                     .append(Doc::line_or_space())
                     .append(Doc::text("#}"))
@@ -886,15 +956,18 @@ impl<'s> DocGen<'s> for JinjaOrDjangoComment<'s> {
     }
 }
 
-impl<'s> DocGen<'s> for JinjaOrDjangoInterpolation<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         match ctx.language {
             Language::Jinja => Doc::text("{{")
                 .append(Doc::line_or_space())
-                .append(Doc::text(self.expr.trim()))
+                .concat(reflow_with_indent(
+                    ctx.format_jinja(self.expr, self.start, true, state).trim(),
+                    true,
+                ))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("}}"))
@@ -906,7 +979,7 @@ impl<'s> DocGen<'s> for JinjaOrDjangoInterpolation<'s> {
 }
 
 impl<'s> DocGen<'s> for JinjaTag<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
@@ -927,21 +1000,17 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
                     (content, "")
                 };
 
-                let docs = Doc::text("{%")
-                    .append(Doc::text(prefix))
-                    .append(Doc::line_or_space());
-                let docs = if content.trim().starts_with("set") {
-                    if let Some((left, right)) = content.split_once('=') {
-                        docs.append(Doc::text(left.trim()))
-                            .append(Doc::text(" = "))
-                            .append(Doc::text(right.trim()))
-                    } else {
-                        docs.append(Doc::text(content.trim()))
-                    }
-                } else {
-                    docs.append(Doc::text(content.trim()))
-                };
-                docs.nest(ctx.indent_width)
+                let mut docs = Vec::with_capacity(5);
+                docs.push(Doc::text("{%"));
+                docs.push(Doc::text(prefix));
+                docs.push(Doc::line_or_space());
+                docs.extend(reflow_with_indent(
+                    ctx.format_jinja(content, self.start + prefix.len(), false, state)
+                        .trim(),
+                    true,
+                ));
+                Doc::list(docs)
+                    .nest(ctx.indent_width)
                     .append(Doc::line_or_space())
                     .append(Doc::text(suffix))
                     .append(Doc::text("%}"))
@@ -958,27 +1027,34 @@ impl<'s> DocGen<'s> for MustacheBlock<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let content = self.content.trim_ascii();
-        Doc::text("{{")
-            .append(Doc::text(self.prefix))
-            .concat(reflow_raw(content))
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_nil())
-            .append(Doc::text("}}"))
-            .group()
-            .append(format_control_structure_block_children(
-                &self.children,
-                ctx,
-                state,
-            ))
-            .group()
-            .append(
-                Doc::text("{{/")
-                    .concat(reflow_raw(content))
-                    .append(Doc::line_or_nil())
-                    .append(Doc::text("}}"))
-                    .group(),
-            )
+        Doc::list(
+            self.controls
+                .iter()
+                .map(|control| {
+                    let mut docs = Vec::with_capacity(3);
+                    docs.push(Doc::text("{{"));
+                    if control.wc_before {
+                        docs.push(Doc::text("~"));
+                    }
+                    docs.push(Doc::text(control.prefix));
+                    docs.push(Doc::text(control.name));
+                    if let Some(content) = control.content {
+                        docs.push(Doc::space());
+                        docs.extend(reflow_raw(content.trim_ascii()));
+                    }
+                    if control.wc_after {
+                        docs.push(Doc::text("~"));
+                    }
+                    docs.push(Doc::text("}}"));
+                    Doc::list(docs)
+                })
+                .interleave(
+                    self.children
+                        .iter()
+                        .map(|nodes| format_control_structure_block_children(nodes, ctx, state)),
+                )
+                .collect(),
+        )
     }
 }
 
@@ -1023,14 +1099,21 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 Language::Vue => {
                     if state
                         .current_tag_name
-                        .map(|name| name.eq_ignore_ascii_case("script"))
-                        .unwrap_or_default()
+                        .is_some_and(|name| name.eq_ignore_ascii_case("script"))
                         && self.name == "generic"
                     {
-                        Cow::from(ctx.format_type_params(value, value_start, state))
+                        Cow::from(ctx.format_type_params(value, value_start))
                     } else {
                         Cow::from(value)
                     }
+                }
+                Language::Svelte
+                    if state
+                        .current_tag_name
+                        .is_some_and(|name| name.eq_ignore_ascii_case("script"))
+                        && self.name == "generics" =>
+                {
+                    Cow::from(ctx.format_type_params(value, value_start))
                 }
                 Language::Svelte if !ctx.options.strict_svelte_attr => {
                     if let Some(expr) = value
@@ -1038,7 +1121,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                         .and_then(|s| s.strip_suffix('}'))
                         .filter(|s| !s.contains('{'))
                     {
-                        let formatted_expr = ctx.format_expr(expr, false, value_start, state);
+                        let formatted_expr = ctx.format_expr(expr, false, value_start);
                         return match self.name.split_once(':') {
                             Some((_, name))
                                 if matches!(ctx.options.svelte_directive_shorthand, Some(true))
@@ -1050,12 +1133,12 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                                 && self.name == formatted_expr =>
                             {
                                 Doc::text("{")
-                                    .concat(reflow_with_indent(&formatted_expr))
+                                    .concat(reflow_with_indent(&formatted_expr, true))
                                     .append(Doc::text("}"))
                             }
                             _ => Doc::text(self.name.to_owned())
                                 .append(Doc::text("={"))
-                                .concat(reflow_with_indent(&formatted_expr))
+                                .concat(reflow_with_indent(&formatted_expr, true))
                                 .append(Doc::text("}")),
                         };
                     } else {
@@ -1065,16 +1148,16 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 Language::Angular
                     if self.name.starts_with(['[', '(']) && self.name.ends_with([']', ')']) =>
                 {
-                    Cow::from(ctx.format_expr(value, false, value_start, state))
+                    Cow::from(ctx.format_expr(value, false, value_start))
                 }
                 _ => Cow::from(value),
             };
-            let quote = compute_attr_value_quote(&value, self.quote, ctx);
+            let quote;
             let mut docs = Vec::with_capacity(5);
             docs.push(name);
             docs.push(Doc::text("="));
-            docs.push(quote.clone());
             if should_be_space_separated(self.name, state) {
+                quote = compute_attr_value_quote(&value, self.quote, ctx);
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
                     Doc::hard_line()
@@ -1096,17 +1179,46 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 );
                 docs.push(maybe_line_break);
             } else if self.name.eq_ignore_ascii_case("style") {
-                docs.push(Doc::text(ctx.format_style_attr(&value, value_start, state)));
+                let (statics, dynamics) =
+                    parse_as_interpolated(&value, value_start, ctx.language, true);
+                const PLACEHOLDER: &str = "_mnk0430_";
+                let formatted =
+                    ctx.format_style_attr(&statics.join(PLACEHOLDER), value_start, state);
+                quote = compute_attr_value_quote(&formatted, self.quote, ctx);
+                docs.push(Doc::text(
+                    formatted
+                        .split(PLACEHOLDER)
+                        .map(Cow::from)
+                        .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
+                            Language::Svelte => {
+                                Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, *start),))
+                            }
+                            Language::Jinja | Language::Django => Cow::from(format!(
+                                "{{{{ {} }}}}",
+                                ctx.format_jinja(expr, *start, true, state),
+                            )),
+                            Language::Vento => Cow::from(format!(
+                                "{{{{ {} }}}}",
+                                ctx.format_expr(expr, true, *start),
+                            )),
+                            Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                            _ => unreachable!(),
+                        }))
+                        .collect::<String>(),
+                ));
             } else if self.name.eq_ignore_ascii_case("accept")
                 && state
                     .current_tag_name
                     .map(|name| name.eq_ignore_ascii_case("input"))
                     .unwrap_or_default()
             {
+                quote = compute_attr_value_quote(&value, self.quote, ctx);
                 docs.push(Doc::text(value.split(',').map(|s| s.trim()).join(", ")));
             } else {
+                quote = compute_attr_value_quote(&value, self.quote, ctx);
                 docs.extend(reflow_owned(&value));
             }
+            docs.insert(2, quote.clone());
             docs.push(quote);
             Doc::list(docs)
         } else if matches!(ctx.language, Language::Svelte)
@@ -1116,7 +1228,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 let value = format!("{{{binding_name}}}");
                 name.append(Doc::text("="))
                     .append(if ctx.options.strict_svelte_attr {
-                        format_attr_value(value, &ctx.options.quotes, ctx)
+                        format_attr_value(value, &ctx.options.quotes)
                     } else {
                         Doc::text(value)
                     })
@@ -1136,6 +1248,7 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
     {
         match self {
             NodeKind::AngularFor(angular_for) => angular_for.doc(ctx, state),
+            NodeKind::AngularGenericBlocks(blocks) => blocks.doc(ctx, state),
             NodeKind::AngularIf(angular_if) => angular_if.doc(ctx, state),
             NodeKind::AngularInterpolation(angular_interpolation) => {
                 angular_interpolation.doc(ctx, state)
@@ -1149,8 +1262,8 @@ impl<'s> DocGen<'s> for NodeKind<'s> {
             NodeKind::Element(element) => element.doc(ctx, state),
             NodeKind::FrontMatter(front_matter) => front_matter.doc(ctx, state),
             NodeKind::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
-            NodeKind::JinjaOrDjangoComment(jinja_comment) => jinja_comment.doc(ctx, state),
-            NodeKind::JinjaOrDjangoInterpolation(jinja_interpolation) => {
+            NodeKind::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
+            NodeKind::JinjaInterpolation(jinja_interpolation) => {
                 jinja_interpolation.doc(ctx, state)
             }
             NodeKind::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
@@ -1207,9 +1320,7 @@ impl<'s> DocGen<'s> for Root<'s> {
             )
             || !is_whitespace_sensitive && has_two_more_non_text_children
         {
-            let mut state = state.clone();
-            state.indent_level += 1;
-            format_children_with_inserting_linebreak(&self.children, ctx, &state)
+            format_children_with_inserting_linebreak(&self.children, ctx, state)
                 .append(Doc::hard_line())
         } else {
             format_children_without_inserting_linebreak(&self.children, ctx, state)
@@ -1219,31 +1330,26 @@ impl<'s> DocGen<'s> for Root<'s> {
 }
 
 impl<'s> DocGen<'s> for SvelteAtTag<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{@")
             .append(Doc::text(self.name))
             .append(Doc::space())
-            .append(Doc::text(ctx.format_expr(
-                self.expr.0,
-                false,
-                self.expr.1,
-                state,
-            )))
+            .append(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)))
             .append(Doc::text("}"))
     }
 }
 
 impl<'s> DocGen<'s> for SvelteAttribute<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1, state);
+        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         let expr = Doc::text("{")
-            .concat(reflow_with_indent(&expr_code))
+            .concat(reflow_with_indent(&expr_code, true))
             .append(Doc::text("}"));
         if let Some(name) = self.name {
             match name.split_once(':') {
@@ -1264,7 +1370,6 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
                         name.append(format_attr_value(
                             format!("{{{expr_code}}}"),
                             &ctx.options.quotes,
-                            ctx,
                         ))
                     } else {
                         name.append(expr)
@@ -1277,7 +1382,6 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
                 name.append(format_attr_value(
                     format!("{{{expr_code}}}"),
                     &ctx.options.quotes,
-                    ctx,
                 ))
             } else {
                 name.append(expr)
@@ -1289,13 +1393,13 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
 }
 
 impl<'s> DocGen<'s> for SvelteAttachment<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1, state);
+        let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         Doc::text("{@attach ")
-            .concat(reflow_with_indent(&expr_code))
+            .concat(reflow_with_indent(&expr_code, true))
             .append(Doc::text("}"))
     }
 }
@@ -1307,19 +1411,14 @@ impl<'s> DocGen<'s> for SvelteAwaitBlock<'s> {
     {
         let mut head = Vec::with_capacity(5);
         head.push(Doc::text("{#await "));
-        head.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
-            state,
-        )));
+        head.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
 
         if let Some(then) = self.then_binding {
             head.push(Doc::line_or_space());
             head.push(Doc::text("then"));
             if let Some((binding, start)) = then {
                 head.push(Doc::space());
-                head.push(Doc::text(ctx.format_binding(binding, start, state)));
+                head.push(Doc::text(ctx.format_binding(binding, start)));
             }
         }
 
@@ -1328,7 +1427,7 @@ impl<'s> DocGen<'s> for SvelteAwaitBlock<'s> {
             head.push(Doc::text("catch"));
             if let Some((binding, start)) = catch {
                 head.push(Doc::space());
-                head.push(Doc::text(ctx.format_binding(binding, start, state)));
+                head.push(Doc::text(ctx.format_binding(binding, start)));
             }
         }
 
@@ -1367,7 +1466,7 @@ impl<'s> DocGen<'s> for SvelteCatchBlock<'s> {
         let children = format_control_structure_block_children(&self.children, ctx, state);
         if let Some((binding, start)) = self.binding {
             Doc::text("{:catch ")
-                .append(Doc::text(ctx.format_binding(binding, start, state)))
+                .append(Doc::text(ctx.format_binding(binding, start)))
                 .append(Doc::text("}"))
                 .append(children)
         } else {
@@ -1381,41 +1480,29 @@ impl<'s> DocGen<'s> for SvelteEachBlock<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let mut head = Vec::with_capacity(5);
-        head.push(Doc::text("{#each "));
-        head.push(Doc::text(ctx.format_expr(
-            self.expr.0,
+        let mut docs = Vec::with_capacity(5);
+        docs.push(Doc::text("{#each "));
+        docs.extend(reflow_with_indent(
+            &ctx.format_expr(self.expr.0, false, self.expr.1),
             false,
-            self.expr.1,
-            state,
-        )));
+        ));
         if let Some(binding) = self.binding {
-            head.push(Doc::text(" as"));
-            head.push(Doc::line_or_space());
-            head.push(Doc::text(ctx.format_binding(binding.0, binding.1, state)));
+            docs.push(Doc::text(" as "));
+            docs.push(Doc::text(ctx.format_binding(binding.0, binding.1)));
         }
 
         if let Some(index) = self.index {
-            head.push(Doc::text(","));
-            head.push(Doc::line_or_space());
-            head.push(Doc::text(index));
+            docs.push(Doc::text(", "));
+            docs.push(Doc::text(index));
         }
 
         if let Some((key, start)) = self.key {
-            head.push(Doc::line_or_space());
-            head.push(Doc::text("("));
-            head.push(Doc::text(ctx.format_expr(key, false, start, state)));
-            head.push(Doc::text(")"));
+            docs.push(Doc::text(" ("));
+            docs.push(Doc::text(ctx.format_expr(key, false, start)));
+            docs.push(Doc::text(")"));
         }
 
-        let mut docs = Vec::with_capacity(5);
-        docs.push(
-            Doc::list(head)
-                .nest(ctx.indent_width)
-                .append(Doc::line_or_nil())
-                .append(Doc::text("}"))
-                .group(),
-        );
+        docs.push(Doc::text("}"));
         docs.push(format_control_structure_block_children(
             &self.children,
             ctx,
@@ -1440,12 +1527,7 @@ impl<'s> DocGen<'s> for SvelteElseIfBlock<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{:else if ")
-            .append(Doc::text(ctx.format_expr(
-                self.expr.0,
-                false,
-                self.expr.1,
-                state,
-            )))
+            .append(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)))
             .append(Doc::text("}"))
             .append(format_control_structure_block_children(
                 &self.children,
@@ -1462,12 +1544,7 @@ impl<'s> DocGen<'s> for SvelteIfBlock<'s> {
     {
         let mut docs = Vec::with_capacity(5);
         docs.push(Doc::text("{#if "));
-        docs.push(Doc::text(ctx.format_expr(
-            self.expr.0,
-            false,
-            self.expr.1,
-            state,
-        )));
+        docs.push(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)));
         docs.push(Doc::text("}"));
         docs.push(format_control_structure_block_children(
             &self.children,
@@ -1494,18 +1571,16 @@ impl<'s> DocGen<'s> for SvelteIfBlock<'s> {
 }
 
 impl<'s> DocGen<'s> for SvelteInterpolation<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{")
             .append(Doc::line_or_nil())
-            .concat(reflow_with_indent(&ctx.format_expr(
-                self.expr.0,
-                false,
-                self.expr.1,
-                state,
-            )))
+            .concat(reflow_with_indent(
+                &ctx.format_expr(self.expr.0, false, self.expr.1),
+                true,
+            ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_nil())
             .append(Doc::text("}"))
@@ -1519,12 +1594,7 @@ impl<'s> DocGen<'s> for SvelteKeyBlock<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{#key ")
-            .append(Doc::text(ctx.format_expr(
-                self.expr.0,
-                false,
-                self.expr.1,
-                state,
-            )))
+            .append(Doc::text(ctx.format_expr(self.expr.0, false, self.expr.1)))
             .append(Doc::text("}"))
             .append(format_control_structure_block_children(
                 &self.children,
@@ -1572,7 +1642,7 @@ impl<'s> DocGen<'s> for SvelteThenBlock<'s> {
         docs.push(Doc::text("{:then"));
         if let Some((binding, start)) = self.binding {
             docs.push(Doc::space());
-            docs.push(Doc::text(ctx.format_binding(binding, start, state)));
+            docs.push(Doc::text(ctx.format_binding(binding, start)));
         }
         docs.push(Doc::text("}"));
         docs.push(format_control_structure_block_children(
@@ -1593,7 +1663,7 @@ impl<'s> DocGen<'s> for TextNode<'s> {
             if self.raw.chars().all(|c| c.is_ascii_whitespace()) {
                 Doc::nil()
             } else {
-                Doc::list(reflow_raw(self.raw).collect())
+                Doc::list(reflow_raw(self.raw.trim_ascii()).collect())
             }
         } else {
             // for #16
@@ -1635,7 +1705,7 @@ impl<'s> DocGen<'s> for VentoComment<'s> {
         if ctx.options.format_comments {
             Doc::text("{{#")
                 .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim()))
+                .concat(reflow_with_indent(self.raw.trim(), true))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("#}}"))
@@ -1659,6 +1729,7 @@ impl<'s> DocGen<'s> for VentoEval<'s> {
                 ctx.format_script(self.raw, "js", self.start, state)
                     .trim()
                     .trim_end_matches(';'),
+                true,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -1668,7 +1739,7 @@ impl<'s> DocGen<'s> for VentoEval<'s> {
 }
 
 impl<'s> DocGen<'s> for VentoInterpolation<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
@@ -1677,7 +1748,7 @@ impl<'s> DocGen<'s> for VentoInterpolation<'s> {
             .concat(itertools::intersperse(
                 self.expr.split("|>").map(|expr| {
                     Doc::list(
-                        reflow_with_indent(&ctx.format_expr(expr, false, self.start, state))
+                        reflow_with_indent(&ctx.format_expr(expr, false, self.start), true)
                             .collect(),
                     )
                 }),
@@ -1708,10 +1779,10 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                 self.tag.split("|>").map(|item| {
                     let parsed_tag = helpers::parse_vento_tag(item);
                     if let ("if", rest) = parsed_tag {
-                        format_vento_stmt_header("if", "if", rest, ctx, state)
+                        format_vento_stmt_header("if", "if", rest, ctx)
                     } else if let ("else", rest) = parsed_tag {
                         if let ("if", rest) = helpers::parse_vento_tag(rest) {
-                            format_vento_stmt_header("else if", "if", rest, ctx, state)
+                            format_vento_stmt_header("else if", "if", rest, ctx)
                         } else {
                             Doc::text("else")
                         }
@@ -1722,7 +1793,7 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                             } else {
                                 ("for", rest)
                             };
-                        format_vento_stmt_header(keyword, keyword, rest, ctx, state)
+                        format_vento_stmt_header(keyword, keyword, rest, ctx)
                     } else if let (tag_name @ ("include" | "layout"), rest) = parsed_tag {
                         let mut brace_index = None;
                         let mut quotes_stack = vec![];
@@ -1749,29 +1820,30 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                             Doc::text(tag_name.to_string())
                                 .append(Doc::space())
                                 .concat(reflow_with_indent(
-                                    &ctx.format_expr(template, false, 0, state),
+                                    &ctx.format_expr(template, false, 0),
+                                    true,
                                 ))
                                 .append(Doc::text(" "))
-                                .concat(reflow_with_indent(&ctx.format_expr(data, false, 0, state)))
+                                .concat(reflow_with_indent(&ctx.format_expr(data, false, 0), true))
                         } else {
                             Doc::text(tag_name.to_string()).append(Doc::space()).concat(
-                                reflow_with_indent(&ctx.format_expr(parsed_tag.1, false, 0, state)),
+                                reflow_with_indent(&ctx.format_expr(parsed_tag.1, false, 0), true),
                             )
                         }
                     } else if parsed_tag.0 == "function" || parsed_tag.1.starts_with("function") {
                         // unsupported at present
-                        Doc::list(reflow_with_indent(item.trim()).collect())
+                        Doc::list(reflow_with_indent(item.trim(), true).collect())
                     } else if let (tag_name @ ("set" | "export"), rest) = parsed_tag {
                         if let Some((binding, expr)) = rest.trim().split_once('=') {
                             Doc::text(tag_name.to_string())
                                 .append(Doc::space())
-                                .concat(reflow_with_indent(&ctx.format_binding(binding, 0, state)))
+                                .concat(reflow_with_indent(&ctx.format_binding(binding, 0), true))
                                 .append(Doc::text(" = "))
-                                .concat(reflow_with_indent(&ctx.format_expr(expr, false, 0, state)))
+                                .concat(reflow_with_indent(&ctx.format_expr(expr, false, 0), true))
                         } else {
                             Doc::text(tag_name.to_string())
                                 .append(Doc::space())
-                                .concat(reflow_with_indent(&ctx.format_binding(rest, 0, state)))
+                                .concat(reflow_with_indent(&ctx.format_binding(rest, 0), true))
                         }
                     } else if let ("import", _) = parsed_tag {
                         Doc::list(
@@ -1779,11 +1851,12 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                                 ctx.format_script(item, "js", 0, state)
                                     .trim()
                                     .trim_end_matches(';'),
+                                true,
                             )
                             .collect(),
                         )
                     } else {
-                        Doc::list(reflow_with_indent(item.trim()).collect())
+                        Doc::list(reflow_with_indent(item.trim(), true).collect())
                     }
                 }),
                 Doc::line_or_space()
@@ -1917,7 +1990,7 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
                         } else {
                             "in"
                         };
-                        format_v_for(left, delimiter, right, value_start, ctx, state)
+                        format_v_for(left, delimiter, right, value_start, ctx)
                     } else if let Some((left, right)) = value.split_once(" of ") {
                         let delimiter = if let Some(VForDelimiterStyle::In) =
                             ctx.options.v_for_delimiter_style
@@ -1926,16 +1999,16 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
                         } else {
                             "of"
                         };
-                        format_v_for(left, delimiter, right, value_start, ctx, state)
+                        format_v_for(left, delimiter, right, value_start, ctx)
                     } else {
                         ctx.with_escaping_quotes(value, |code, ctx| {
-                            ctx.format_expr(&code, true, value_start, state)
+                            ctx.format_expr(&code, true, value_start)
                         })
                     }
                 }
-                "#" | "slot" => ctx.format_binding(value, value_start, state),
+                "#" | "slot" => ctx.format_binding(value, value_start),
                 _ => ctx.with_escaping_quotes(value, |code, ctx| {
-                    ctx.try_format_expr(&code, true, value_start, state)
+                    ctx.try_format_expr(&code, true, value_start)
                         .unwrap_or_else(|_| {
                             let formatted = ctx
                                 .format_script(&code, "ts", value_start, state)
@@ -1954,17 +2027,14 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
                 && matches!(self.arg_and_modifiers, Some(arg_and_modifiers) if arg_and_modifiers == value))
             {
                 docs.push(Doc::text("="));
-                docs.push(format_attr_value(value, &ctx.options.quotes, ctx));
+                docs.push(format_attr_value(value, &ctx.options.quotes));
             }
-        } else if matches!(ctx.options.v_bind_same_name_short_hand, Some(false)) && is_v_bind {
-            if let Some(arg_and_modifiers) = self.arg_and_modifiers {
-                docs.push(Doc::text("="));
-                docs.push(format_attr_value(
-                    arg_and_modifiers,
-                    &ctx.options.quotes,
-                    ctx,
-                ));
-            }
+        } else if matches!(ctx.options.v_bind_same_name_short_hand, Some(false))
+            && is_v_bind
+            && let Some(arg_and_modifiers) = self.arg_and_modifiers
+        {
+            docs.push(Doc::text("="));
+            docs.push(format_attr_value(arg_and_modifiers, &ctx.options.quotes));
         }
 
         Doc::list(docs)
@@ -1972,14 +2042,15 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
 }
 
 impl<'s> DocGen<'s> for VueInterpolation<'s> {
-    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
+    fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         Doc::text("{{")
             .append(Doc::line_or_space())
             .concat(reflow_with_indent(
-                &ctx.format_expr(self.expr, false, self.start, state),
+                &ctx.format_expr(self.expr, false, self.start),
+                true,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -2021,8 +2092,15 @@ fn reflow_owned<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
     )
 }
 
-fn reflow_with_indent<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let indent = helpers::detect_indent(s);
+fn reflow_with_indent<'i, 'o: 'i>(
+    s: &'i str,
+    detect_indent: bool,
+) -> impl Iterator<Item = Doc<'o>> + 'i {
+    let indent = if detect_indent {
+        helpers::detect_indent(s)
+    } else {
+        0
+    };
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
@@ -2095,10 +2173,12 @@ fn reflow_with_indent<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> +
 fn is_empty_element(children: &[Node], is_whitespace_sensitive: bool) -> bool {
     match &children {
         [] => true,
-        [Node {
-            kind: NodeKind::Text(text_node),
-            ..
-        }] => {
+        [
+            Node {
+                kind: NodeKind::Text(text_node),
+                ..
+            },
+        ] => {
             !is_whitespace_sensitive
                 && text_node
                     .raw
@@ -2129,7 +2209,7 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
         | Attribute::SvelteAttachment(SvelteAttachment {
             expr: (value, ..), ..
         })
-        | Attribute::JinjaComment(JinjaOrDjangoComment { raw: value, .. })
+        | Attribute::JinjaComment(JinjaComment { raw: value, .. })
         | Attribute::JinjaTag(JinjaTag { content: value, .. }) => value.contains('\n'),
         // Templating blocks usually span across multiple lines so let's just assume true.
         Attribute::JinjaBlock(..) | Attribute::VentoTagOrBlock(..) => true,
@@ -2230,14 +2310,7 @@ fn has_two_more_non_text_children(children: &[Node], language: Language) -> bool
         > 1
 }
 
-fn format_attr_value<'s, E, F>(
-    value: impl AsRef<str>,
-    quotes: &Quotes,
-    ctx: &mut Ctx<'s, E, F>,
-) -> Doc<'s>
-where
-    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
-{
+fn format_attr_value(value: impl AsRef<str>, quotes: &Quotes) -> Doc<'_> {
     let value = value.as_ref();
     let quote = if value.contains('"') {
         Doc::text("'")
@@ -2248,20 +2321,10 @@ where
     } else {
         Doc::text("'")
     };
-    if value.contains('\n') {
-        quote
-            .clone()
-            .append(Doc::hard_line())
-            .append(Doc::list(reflow_with_indent(value).collect()))
-            .nest(ctx.indent_width)
-            .append(Doc::hard_line())
-            .append(quote)
-    } else {
-        quote
-            .clone()
-            .append(Doc::list(reflow_with_indent(value).collect()))
-            .append(quote)
-    }
+    quote
+        .clone()
+        .concat(reflow_with_indent(value, true))
+        .append(quote)
 }
 
 fn format_children_with_inserting_linebreak<'s, E, F>(
@@ -2347,7 +2410,7 @@ fn is_text_like(node: &Node, language: Language) -> bool {
         | NodeKind::VueInterpolation(..)
         | NodeKind::SvelteInterpolation(..)
         | NodeKind::AstroExpr(..)
-        | NodeKind::JinjaOrDjangoInterpolation(..)
+        | NodeKind::JinjaInterpolation(..)
         | NodeKind::VentoInterpolation(..) => true,
         _ => false,
     }
@@ -2437,8 +2500,7 @@ where
 {
     let option = if state
         .current_tag_name
-        .map(|name| name.eq_ignore_ascii_case("template"))
-        .unwrap_or_default()
+        .is_some_and(|name| name.eq_ignore_ascii_case("template"))
     {
         if slot == "default" {
             ctx.options.default_v_slot_style.clone()
@@ -2522,13 +2584,12 @@ fn format_v_for<'s, E, F>(
     right: &str,
     start: usize,
     ctx: &mut Ctx<'s, E, F>,
-    state: &State<'s>,
 ) -> String
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
-    let left = ctx.format_expr(left, false, start, state);
-    let right = ctx.format_expr(right, false, start + 4, state);
+    let left = ctx.format_expr(left, false, start);
+    let right = ctx.format_expr(right, false, start + 4);
     if left.contains(',') && !left.contains('(') {
         format!("({left}) {delimiter} {right}")
     } else {
@@ -2545,10 +2606,12 @@ where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
     match children {
-        [Node {
-            kind: NodeKind::Text(text_node),
-            ..
-        }] if is_all_ascii_whitespace(text_node.raw) => Doc::line_or_space(),
+        [
+            Node {
+                kind: NodeKind::Text(text_node),
+                ..
+            },
+        ] if is_all_ascii_whitespace(text_node.raw) => Doc::line_or_space(),
         _ => format_ws_sensitive_leading_ws(children)
             .append(format_children_without_inserting_linebreak(
                 children, ctx, state,
@@ -2563,18 +2626,16 @@ fn format_vento_stmt_header<'s, E, F>(
     fake_keyword: &'static str,
     code: &'s str,
     ctx: &mut Ctx<'s, E, F>,
-    state: &State<'s>,
 ) -> Doc<'s>
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
     Doc::text(tag_keyword)
         .append(Doc::space())
-        .concat(reflow_with_indent(&ctx.format_stmt_header(
-            fake_keyword,
-            code,
-            state,
-        )))
+        .concat(reflow_with_indent(
+            &ctx.format_stmt_header(fake_keyword, code),
+            true,
+        ))
 }
 
 /// Computes the appropriate quote character (single or double) to use for an attribute value.

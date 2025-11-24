@@ -1,13 +1,16 @@
-use dprint_core::configuration::{
-    get_nullable_value, get_unknown_property_diagnostics, get_value, ConfigKeyMap,
-    ConfigurationDiagnostic, GlobalConfiguration, NewLineKind, ResolveConfigurationResult,
+use dprint_core::{
+    configuration::{
+        ConfigKeyMap, ConfigurationDiagnostic, GlobalConfiguration, NewLineKind,
+        get_nullable_value, get_unknown_property_diagnostics, get_value,
+    },
+    plugins::{FileMatchingInfo, PluginResolveConfigurationResult},
 };
 use markup_fmt::config::*;
 
 pub(crate) fn resolve_config(
     mut config: ConfigKeyMap,
     global_config: &GlobalConfiguration,
-) -> ResolveConfigurationResult<FormatOptions> {
+) -> PluginResolveConfigurationResult<FormatOptions> {
     let mut diagnostics = Vec::new();
     let markup_fmt_config = FormatOptions {
         layout: LayoutOptions {
@@ -337,6 +340,23 @@ pub(crate) fn resolve_config(
                 "vBindSameNameShortHand",
                 &mut diagnostics,
             ),
+            vue_component_case: match &*get_value(
+                &mut config,
+                "vueComponentCase",
+                "ignore".to_string(),
+                &mut diagnostics,
+            ) {
+                "ignore" => VueComponentCase::Ignore,
+                "pascalCase" | "PascalCase" => VueComponentCase::PascalCase,
+                "kebabCase" | "kebab-case" => VueComponentCase::KebabCase,
+                _ => {
+                    diagnostics.push(ConfigurationDiagnostic {
+                        property_name: "vueComponentCase".into(),
+                        message: "invalid value for config `vueComponentCase`".into(),
+                    });
+                    Default::default()
+                }
+            },
             strict_svelte_attr: get_value(&mut config, "strictSvelteAttr", false, &mut diagnostics),
             svelte_attr_shorthand: get_nullable_value(
                 &mut config,
@@ -346,6 +366,12 @@ pub(crate) fn resolve_config(
             svelte_directive_shorthand: get_nullable_value(
                 &mut config,
                 "svelteDirectiveShorthand",
+                &mut diagnostics,
+            ),
+            angular_next_control_flow_same_line: get_value(
+                &mut config,
+                "angularNextControlFlowSameLine",
+                true,
                 &mut diagnostics,
             ),
             astro_attr_shorthand: get_nullable_value(
@@ -399,8 +425,36 @@ pub(crate) fn resolve_config(
 
     diagnostics.extend(get_unknown_property_diagnostics(config));
 
-    ResolveConfigurationResult {
+    PluginResolveConfigurationResult {
         config: markup_fmt_config,
         diagnostics,
+        file_matching: FileMatchingInfo {
+            file_extensions: [
+                "html",
+                "vue",
+                "svelte",
+                "astro",
+                "jinja",
+                "jinja2",
+                "j2",
+                "twig",
+                "njk",
+                "vto",
+                "component.html",
+                "mustache",
+                "hbs",
+                "handlebars",
+                "xml",
+                "svg",
+                "wsdl",
+                "xsd",
+                "xslt",
+                "xsl",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+            file_names: vec![],
+        },
     }
 }

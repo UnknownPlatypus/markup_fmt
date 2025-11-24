@@ -1,7 +1,7 @@
-use crate::state::State;
 use crate::Language;
+use crate::state::State;
 use aho_corasick::AhoCorasick;
-use std::sync::LazyLock;
+use std::{borrow::Cow, sync::LazyLock};
 
 pub(crate) fn is_component(name: &str) -> bool {
     name.contains('-') || name.contains(|c: char| c.is_ascii_uppercase())
@@ -207,6 +207,47 @@ pub(crate) fn detect_indent(s: &str) -> usize {
         })
         .min()
         .unwrap_or_default()
+}
+
+pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {
+    let uppers = s.chars().filter(char::is_ascii_uppercase).count();
+    if uppers > 1
+        || s.find(|c: char| c.is_ascii_uppercase())
+            .is_some_and(|index| index > 0)
+    {
+        let mut result = String::with_capacity(s.len() + uppers);
+        s.chars().fold('<', |prev, c| {
+            if c.is_ascii_uppercase() && prev.is_ascii_lowercase() {
+                result.push('-');
+            }
+            result.push(c.to_ascii_lowercase());
+            c
+        });
+        Cow::from(result)
+    } else {
+        Cow::from(s)
+    }
+}
+
+pub(crate) fn kebab2pascal(s: &'_ str) -> Cow<'_, str> {
+    if s.contains('-')
+        || s.find(|c: char| c.is_ascii_uppercase())
+            .is_some_and(|index| index > 0)
+    {
+        let mut result = String::with_capacity(s.len());
+        s.chars().fold('<', |prev, c| {
+            if c == '-' {
+            } else if matches!(prev, '-' | '<') {
+                result.push(c.to_ascii_uppercase());
+            } else {
+                result.push(c);
+            }
+            c
+        });
+        Cow::from(result)
+    } else {
+        Cow::from(s)
+    }
 }
 
 /// Checks if the given attribute name content should be space-separated.

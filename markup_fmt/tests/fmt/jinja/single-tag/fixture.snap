@@ -16,7 +16,7 @@ source: markup_fmt/tests/fmt.rs
 {% set ns = namespace(found=false) %}
 {% set ns.foo = 'bar' %}
 {% set pipe = joiner("|") %}
-{% set pipe = joiner("|") %}
+{% set pipe=joiner("|") %}
 
 {%
   include "root/long_directory_name/very_long_subdirectory_name/sidebar.html" ignore missing

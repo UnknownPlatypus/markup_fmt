@@ -1,10 +1,10 @@
-use insta::{assert_snapshot, glob, Settings};
-use markup_fmt::{config::FormatOptions, detect_language, format_text, Language};
+use insta::{Settings, assert_snapshot, glob};
+use markup_fmt::{Language, config::FormatOptions, detect_language, format_text};
 use std::{collections::HashMap, fs, path::Path};
 
 #[test]
 fn fmt_snapshot() {
-    let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,xml}";
+    let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,hbs,xml}";
     glob!(pattern, |path| {
         let input = fs::read_to_string(path).unwrap();
         let language = if path.to_str().unwrap().contains("django") {

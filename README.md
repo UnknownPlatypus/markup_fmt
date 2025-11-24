@@ -2,7 +2,7 @@
 <h1 align="center">markup_fmt</h1>
 
 <p align="center">
-markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento, Mustache and XML formatter.
+markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento, Mustache, Handlebars and XML formatter.
 </p>
 
 ## Additions in this fork
@@ -30,7 +30,7 @@ This will make ESLint faster because less rules will be executed.
 
 We've provided [dprint](https://dprint.dev/) integration.
 
-This plugin only formats HTML syntax of your HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento, Mustache and XML files.
+This plugin only formats HTML syntax of your HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento, Mustache, Handlebars and XML files.
 You also need other dprint plugins to format the code in `<script>` and `<style>` tags.
 You can use [dprint-plugin-typescript](https://github.com/dprint/dprint-plugin-typescript) to
 format TypeScript/JavaScript code and [Malva](https://github.com/g-plane/malva) to format CSS/SCSS/Sass/Less code.
@@ -50,13 +50,7 @@ you can add dprint-plugin-json:
 dprint config add json
 ```
 
-Or Biome:
-
-```diff
-- dprint config add typescript
-- dprint config add json
-+ dprint config add biome
-```
+If you want to format Jinja, it's recommended to add [Pretty Jinja](https://github.com/g-plane/pretty_jinja) dprint plugin as well.
 
 After adding the dprint plugins, update your `dprint.json` and add configuration:
 
@@ -65,7 +59,7 @@ After adding the dprint plugins, update your `dprint.json` and add configuration
   // ...
   "plugins": [
     // ... other plugins URL
-    "https://plugins.dprint.dev/g-plane/markup_fmt-v0.22.0.wasm"
+    "https://plugins.dprint.dev/g-plane/markup_fmt-v0.25.0.wasm"
   ],
   "markup": { // <-- the key name here is "markup", not "markup_fmt"
     // config comes here

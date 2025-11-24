@@ -1,13 +1,11 @@
 use crate::{
+    Language,
     config::{LanguageOptions, Quotes, WhitespaceSensitivity},
     helpers,
     state::State,
-    Language,
 };
 use memchr::memchr;
 use std::borrow::Cow;
-
-const TYPE_PARAMS_INDENT: usize = "<script setup lang=\"ts\" generic=\"\">".len();
 
 const QUOTES: [&str; 3] = ["\"", "\"", "'"];
 
@@ -124,14 +122,8 @@ where
         }
     }
 
-    pub(crate) fn format_expr(
-        &mut self,
-        code: &str,
-        attr: bool,
-        start: usize,
-        state: &State,
-    ) -> String {
-        match self.try_format_expr(code, attr, start, state) {
+    pub(crate) fn format_expr(&mut self, code: &str, attr: bool, start: usize) -> String {
+        match self.try_format_expr(code, attr, start) {
             Ok(formatted) => formatted,
             Err(e) => {
                 self.external_formatter_errors.push(e);
@@ -145,7 +137,6 @@ where
         code: &str,
         attr: bool,
         start: usize,
-        state: &State,
     ) -> Result<String, E> {
         if code.trim().is_empty() {
             Ok(String::new())
@@ -153,80 +144,54 @@ where
             // Trim original code before sending it to the external formatter.
             // This makes sure the code will be trimmed
             // though external formatter isn't available.
-            let wrapped = self
-                .source
-                .get(0..start.saturating_sub(3))
-                .unwrap_or_default()
-                .replace(|c: char| !c.is_ascii_whitespace(), " ")
-                + "<>{"
-                + code.trim()
-                + "}</>";
+            let wrapped = if code.trim_start().starts_with('{') {
+                self.source
+                    .get(0..start.saturating_sub(1))
+                    .unwrap_or_default()
+                    .replace(|c: char| !c.is_ascii_whitespace(), " ")
+                    + "("
+                    + code.trim()
+                    + ")"
+            } else {
+                self.source
+                    .get(0..start)
+                    .unwrap_or_default()
+                    .replace(|c: char| !c.is_ascii_whitespace(), " ")
+                    + code
+            };
             let formatted = self.try_format_with_external_formatter(
                 wrapped,
                 Hints {
-                    print_width: self
-                        .print_width
-                        .saturating_sub((state.indent_level as usize) * self.indent_width)
-                        .saturating_sub(2), // this is technically wrong, just workaround
-                    indent_level: state.indent_level,
+                    print_width: self.print_width,
+                    indent_level: 0,
                     attr,
                     ext: "tsx",
                 },
             )?;
             let formatted = formatted.trim_matches(|c: char| c.is_ascii_whitespace() || c == ';');
-            let formatted = formatted
-                .strip_prefix("<>")
-                .and_then(|s| s.strip_suffix("</>"))
-                .unwrap_or(formatted);
-            // The condition below detects these cases:
-            // 1. Language is not Astro
-            // 2. There's a line break after `{`
-            //    ```
-            //    {
-            //        /*
-            //        */
-            //    }
-            //    ```
-            // 3. The indentation level of inner content is less than that of `{`
-            //    ```
-            //        {/*
-            //    Hello
-            //    */}
-            //    ```
-            let formatted = if self.language != Language::Astro
-                || formatted
-                    .trim_ascii_start()
-                    .strip_prefix('{')
-                    .is_some_and(|s| s.starts_with(['\n', '\r']))
-                || formatted
-                    .trim_start_matches(['\n', '\r'])
-                    .find('{')
-                    .is_some_and(|index| {
-                        helpers::detect_indent(formatted.trim_start_matches(['\n', '\r'])) < index
-                    }) {
+            let formatted = if code.trim_start().chars().take_while(|c| *c == '(').count()
+                < formatted.chars().take_while(|c| *c == '(').count()
+                && code
+                    .trim_end()
+                    .chars()
+                    .rev()
+                    .take_while(|c| *c == ')')
+                    .count()
+                    < formatted.chars().rev().take_while(|c| *c == ')').count()
+            {
                 formatted
                     .trim_ascii()
-                    .strip_prefix('{')
-                    .and_then(|s| s.strip_suffix('}'))
+                    .strip_prefix('(')
+                    .and_then(|s| s.strip_suffix(')'))
                     .unwrap_or(formatted)
-                    .trim_ascii_start()
-                    .trim_matches(|c: char| c.is_ascii_whitespace() || c == ';')
-                    .to_owned()
             } else {
                 formatted
-                    .replacen('{', "", 1)
-                    .trim_ascii_end()
-                    .strip_suffix('}')
-                    .unwrap_or(formatted)
-                    .trim_start_matches(['\n', '\r'])
-                    .trim_end_matches(|c: char| c.is_ascii_whitespace() || c == ';')
-                    .to_owned()
             };
-            Ok(formatted)
+            Ok(formatted.trim_ascii().to_owned())
         }
     }
 
-    pub(crate) fn format_binding(&mut self, code: &str, start: usize, state: &State) -> String {
+    pub(crate) fn format_binding(&mut self, code: &str, start: usize) -> String {
         if code.trim().is_empty() {
             String::new()
         } else {
@@ -241,11 +206,8 @@ where
             let formatted = self.format_with_external_formatter(
                 wrapped,
                 Hints {
-                    print_width: self
-                        .print_width
-                        .saturating_sub((state.indent_level as usize) * self.indent_width)
-                        .saturating_sub(2), // this is technically wrong, just workaround
-                    indent_level: state.indent_level,
+                    print_width: self.print_width,
+                    indent_level: 0,
                     attr: false,
                     ext: "ts",
                 },
@@ -259,7 +221,7 @@ where
         }
     }
 
-    pub(crate) fn format_type_params(&mut self, code: &str, start: usize, state: &State) -> String {
+    pub(crate) fn format_type_params(&mut self, code: &str, start: usize) -> String {
         if code.trim().is_empty() {
             String::new()
         } else {
@@ -274,11 +236,8 @@ where
             let formatted = self.format_with_external_formatter(
                 wrapped,
                 Hints {
-                    print_width: self
-                        .print_width
-                        .saturating_sub((state.indent_level as usize) * self.indent_width)
-                        .saturating_sub(TYPE_PARAMS_INDENT), // this is technically wrong, just workaround
-                    indent_level: state.indent_level,
+                    print_width: self.print_width,
+                    indent_level: 0,
                     attr: true,
                     ext: "ts",
                 },
@@ -287,17 +246,14 @@ where
             formatted
                 .strip_prefix("type T<")
                 .and_then(|s| s.strip_suffix("> = 0"))
+                .map(|s| s.trim())
+                .map(|s| s.strip_suffix(',').unwrap_or(s))
                 .unwrap_or(formatted)
                 .to_owned()
         }
     }
 
-    pub(crate) fn format_stmt_header(
-        &mut self,
-        keyword: &str,
-        code: &str,
-        state: &State,
-    ) -> String {
+    pub(crate) fn format_stmt_header(&mut self, keyword: &str, code: &str) -> String {
         if code.trim().is_empty() {
             String::new()
         } else {
@@ -305,11 +261,8 @@ where
             let formatted = self.format_with_external_formatter(
                 wrapped,
                 Hints {
-                    print_width: self
-                        .print_width
-                        .saturating_sub((state.indent_level as usize) * self.indent_width)
-                        .saturating_sub(keyword.len() + 1), // this is technically wrong, just workaround
-                    indent_level: state.indent_level,
+                    print_width: self.print_width,
+                    indent_level: 0,
                     attr: false,
                     ext: "js",
                 },
@@ -340,14 +293,7 @@ where
                 .replace(|c: char| !c.is_ascii_whitespace(), " ")
                 + code,
             Hints {
-                print_width: self
-                    .print_width
-                    .saturating_sub((state.indent_level as usize) * self.indent_width)
-                    .saturating_sub(if self.script_indent() {
-                        self.indent_width
-                    } else {
-                        0
-                    }),
+                print_width: self.print_width,
                 indent_level: state.indent_level,
                 attr: false,
                 ext: lang,
@@ -363,11 +309,14 @@ where
         state: &State,
     ) -> Cow<'a, str> {
         self.format_with_external_formatter(
-            self.source
-                .get(0..start)
-                .unwrap_or_default()
-                .replace(|c: char| !c.is_ascii_whitespace(), " ")
-                + code,
+            "\n".repeat(
+                self.source
+                    .get(0..start)
+                    .unwrap_or_default()
+                    .lines()
+                    .count()
+                    .saturating_sub(1),
+            ) + code,
             Hints {
                 print_width: self
                     .print_width
@@ -428,6 +377,36 @@ where
                 ext: "json",
             },
         )
+    }
+
+    pub(crate) fn format_jinja(
+        &mut self,
+        code: &str,
+        start: usize,
+        expr: bool,
+        state: &State,
+    ) -> String {
+        self.format_with_external_formatter(
+            self.source
+                .get(0..start)
+                .unwrap_or_default()
+                .replace(|c: char| !c.is_ascii_whitespace(), " ")
+                + code,
+            Hints {
+                print_width: self
+                    .print_width
+                    .saturating_sub((state.indent_level as usize) * self.indent_width),
+                indent_level: state.indent_level,
+                attr: false,
+                ext: if expr {
+                    "markup-fmt-jinja-expr"
+                } else {
+                    "markup-fmt-jinja-stmt"
+                },
+            },
+        )
+        .trim_ascii()
+        .to_owned()
     }
 
     fn format_with_external_formatter<'a>(

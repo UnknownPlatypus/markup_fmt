@@ -1,8 +1,10 @@
 use anyhow::Error;
-use insta::{assert_snapshot, glob, Settings};
+use dprint_core::configuration::GlobalConfiguration;
+use insta::{Settings, assert_snapshot, glob};
 use markup_fmt::{
+    FormatError,
     config::{FormatOptions, ScriptFormatter},
-    detect_language, format_text, FormatError,
+    detect_language, format_text,
 };
 use std::{borrow::Cow, fs, io, path::Path};
 
@@ -28,6 +30,12 @@ fn integration_with_dprint_ts_snapshot() {
                 let ext = hints.ext;
                 let additional_config =
                     dprint_plugin_markup::build_additional_config(hints, &options);
+                let global_config = GlobalConfiguration {
+                    line_width: Some(options.layout.print_width as u32),
+                    use_tabs: Some(options.layout.use_tabs),
+                    indent_width: Some(options.layout.indent_width as u8),
+                    ..Default::default()
+                };
                 if let Some(syntax) = malva::detect_syntax(&Path::new("file").with_extension(ext)) {
                     malva::format_text(
                         code,
@@ -43,9 +51,30 @@ fn integration_with_dprint_ts_snapshot() {
                         code,
                         &dprint_plugin_json::configuration::resolve_config(
                             additional_config,
-                            &Default::default(),
+                            &global_config,
                         )
                         .config,
+                    )
+                    .map(|formatted| {
+                        if let Some(formatted) = formatted {
+                            Cow::from(formatted)
+                        } else {
+                            Cow::from(code)
+                        }
+                    })
+                } else if matches!(ext, "tsx" | "ts" | "mts" | "jsx" | "js" | "mjs") {
+                    dprint_plugin_typescript::format_text(
+                        dprint_plugin_typescript::FormatTextOptions {
+                            path: &Path::new("file").with_extension(ext),
+                            extension: Some(ext),
+                            text: code.to_owned(),
+                            config: &dprint_plugin_typescript::configuration::resolve_config(
+                                additional_config,
+                                &global_config,
+                            )
+                            .config,
+                            external_formatter: None,
+                        },
                     )
                     .map(|formatted| {
                         if let Some(formatted) = formatted {
@@ -55,23 +84,7 @@ fn integration_with_dprint_ts_snapshot() {
                         }
                     })
                 } else {
-                    dprint_plugin_typescript::format_text(
-                        &Path::new("file").with_extension(ext),
-                        Some(ext),
-                        code.to_owned(),
-                        &dprint_plugin_typescript::configuration::resolve_config(
-                            additional_config,
-                            &Default::default(),
-                        )
-                        .config,
-                    )
-                    .map(|formatted| {
-                        if let Some(formatted) = formatted {
-                            Cow::from(formatted)
-                        } else {
-                            Cow::from(code)
-                        }
-                    })
+                    Ok(Cow::from(code))
                 }
             },
         )
@@ -108,101 +121,6 @@ fn integration_with_dprint_ts_snapshot() {
             );
 
             build_settings(path.parent().unwrap().join("dprint_ts")).bind(|| {
-                let name = path.file_name().unwrap().to_str().unwrap();
-                assert_snapshot!(name, output);
-            });
-        }
-    );
-}
-
-#[test]
-fn integration_with_biome_snapshot() {
-    fn format_with_biome(input: &str, path: &Path) -> Result<String, FormatError<Error>> {
-        let mut options = match fs::read_to_string(path.with_extension("toml")) {
-            Ok(file) => toml::from_str::<FormatOptions>(&file).unwrap(),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Default::default(),
-            Err(e) => panic!("{e}"),
-        };
-        options.language.script_formatter = Some(ScriptFormatter::Biome);
-        format_text(
-            &input,
-            detect_language(path).unwrap(),
-            &options,
-            |code, hints| -> anyhow::Result<Cow<str>> {
-                let ext = hints.ext;
-                let mut additional_config =
-                    dprint_plugin_markup::build_additional_config(hints, &options);
-                additional_config.insert("javascriptIndentStyle".into(), "space".into());
-                if let Some(syntax) = malva::detect_syntax(&Path::new("file").with_extension(ext)) {
-                    malva::format_text(
-                        code,
-                        syntax,
-                        &serde_json::to_value(additional_config)
-                            .and_then(serde_json::from_value)?,
-                    )
-                    .map(Cow::from)
-                    .map_err(Error::from)
-                } else {
-                    dprint_plugin_biome::format_text(
-                        &Path::new("file").with_extension(ext),
-                        code,
-                        &serde_json::to_value(additional_config)
-                            .and_then(serde_json::from_value)
-                            .unwrap_or_default(),
-                    )
-                    .map(|formatted| {
-                        if let Some(formatted) = formatted {
-                            Cow::from(formatted)
-                        } else {
-                            Cow::from(code)
-                        }
-                    })
-                }
-            },
-        )
-    }
-
-    glob!(
-        "integration/**/*.{html,vue,svelte,astro,jinja,njk,vto}",
-        |path| {
-            let file_name = path.file_name().and_then(|file_name| file_name.to_str());
-            if file_name.is_some_and(|file_name| {
-                file_name == "return.astro" || file_name.starts_with("deno")
-            }) {
-                // dprint-plugin-biome doesn't support top-level return (but Biome supports),
-                // so skip it.
-                // Also, skip tests for Deno only.
-                return;
-            }
-
-            let input = fs::read_to_string(path).unwrap();
-            let output = format_with_biome(&input, path)
-                .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
-                .unwrap();
-
-            assert!(
-                output.ends_with('\n'),
-                "formatted output should contain trailing newline: {}",
-                path.display()
-            );
-
-            let regression_format = format_with_biome(&output, path)
-                .map_err(|err| {
-                    format!(
-                        "syntax error in stability test '{}': {:?}",
-                        path.display(),
-                        err
-                    )
-                })
-                .unwrap();
-            similar_asserts::assert_eq!(
-                output,
-                regression_format,
-                "'{}' format is unstable",
-                path.display()
-            );
-
-            build_settings(path.parent().unwrap().join("biome")).bind(|| {
                 let name = path.file_name().unwrap().to_str().unwrap();
                 assert_snapshot!(name, output);
             });

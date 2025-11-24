@@ -34,6 +34,13 @@ pub struct AngularElseIf<'s> {
 }
 
 #[derive(Debug)]
+pub struct AngularGenericBlock<'s> {
+    pub keyword: &'s str,
+    pub header: Option<&'s str>,
+    pub children: Vec<Node<'s>>,
+}
+
+#[derive(Debug)]
 /// Angular interpolation: `{{ expression }}`.
 ///
 /// See https://angular.dev/guide/templates/binding#render-dynamic-text-with-text-interpolation.
@@ -100,7 +107,7 @@ pub enum AstroExprChild<'s> {
 pub enum Attribute<'s> {
     Astro(AstroAttribute<'s>),
     JinjaBlock(JinjaBlock<'s, Attribute<'s>>),
-    JinjaComment(JinjaOrDjangoComment<'s>),
+    JinjaComment(JinjaComment<'s>),
     JinjaTag(JinjaTag<'s>),
     Native(NativeAttribute<'s>),
     Svelte(SvelteAttribute<'s>),
@@ -168,7 +175,7 @@ pub struct JinjaBlock<'s, T> {
 /// Jinja comment: `{# ... #}`.
 ///
 /// See https://jinja.palletsprojects.com/en/stable/templates/#comments.
-pub struct JinjaOrDjangoComment<'s> {
+pub struct JinjaComment<'s> {
     pub raw: &'s str,
 }
 
@@ -176,8 +183,9 @@ pub struct JinjaOrDjangoComment<'s> {
 /// Jinja interpolation: `{{ ... }}`.
 ///
 /// See https://jinja.palletsprojects.com/en/stable/templates/#expressions.
-pub struct JinjaOrDjangoInterpolation<'s> {
+pub struct JinjaInterpolation<'s> {
     pub expr: &'s str,
+    pub start: usize,
 }
 
 #[derive(Debug)]
@@ -186,6 +194,7 @@ pub struct JinjaOrDjangoInterpolation<'s> {
 /// See https://jinja.palletsprojects.com/en/stable/templates/#list-of-control-structures.
 pub struct JinjaTag<'s> {
     pub content: &'s str,
+    pub start: usize,
 }
 
 #[derive(Debug)]
@@ -199,9 +208,17 @@ pub enum JinjaTagOrChildren<'s, T> {
 ///
 /// See https://mustache.github.io/mustache.5.html
 pub struct MustacheBlock<'s> {
+    pub controls: Vec<MustacheBlockControl<'s>>,
+    pub children: Vec<Vec<Node<'s>>>,
+}
+
+#[derive(Debug)]
+pub struct MustacheBlockControl<'s> {
+    pub name: &'s str,
     pub prefix: &'s str,
-    pub content: &'s str,
-    pub children: Vec<Node<'s>>,
+    pub content: Option<&'s str>,
+    pub wc_before: bool,
+    pub wc_after: bool,
 }
 
 #[derive(Debug)]
@@ -231,6 +248,7 @@ pub struct Node<'s> {
 #[derive(Debug)]
 pub enum NodeKind<'s> {
     AngularFor(AngularFor<'s>),
+    AngularGenericBlocks(Vec<AngularGenericBlock<'s>>),
     AngularIf(AngularIf<'s>),
     AngularInterpolation(AngularInterpolation<'s>),
     AngularLet(AngularLet<'s>),
@@ -242,8 +260,8 @@ pub enum NodeKind<'s> {
     Element(Element<'s>),
     FrontMatter(FrontMatter<'s>),
     JinjaBlock(JinjaBlock<'s, Node<'s>>),
-    JinjaOrDjangoComment(JinjaOrDjangoComment<'s>),
-    JinjaOrDjangoInterpolation(JinjaOrDjangoInterpolation<'s>),
+    JinjaComment(JinjaComment<'s>),
+    JinjaInterpolation(JinjaInterpolation<'s>),
     JinjaTag(JinjaTag<'s>),
     MustacheBlock(MustacheBlock<'s>),
     MustacheInterpolation(MustacheInterpolation<'s>),
