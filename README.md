@@ -11,8 +11,7 @@ markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nun
 - Support configuring a list of custom blocks with `--custom-blocks "markdown,flatblock"` in [b73a519](https://github.com/UnknownPlatypus/markup_fmt/commit/b73a519e79a978ae344f0523a1f1cbfa9fad0755)
 - Normalize html attribute with known semantics in [7255ddf](https://github.com/UnknownPlatypus/markup_fmt/commit/7255ddfdbadea2a22e308f164ef60bb84ec7adcf) and [a4d7720](https://github.com/UnknownPlatypus/markup_fmt/commit/a4d77204216c2e10f42e3b355114af07dd57f053) (See upstream [PR](https://github.com/g-plane/markup_fmt/pull/40))
 - Converge in one pass when formatting a style attr with malva in [05b33f0](https://github.com/UnknownPlatypus/markup_fmt/commit/05b33f0576a05b34cf7ba1180c2d4d7e5e9f3231) (See upstream [PR](https://github.com/g-plane/markup_fmt/pull/113))
-- Never wrap opening tag with no attrs in [42b59e9](https://github.com/UnknownPlatypus/markup_fmt/commit/42b59e926dcb4235df4e44926febe954baec0fc9)
-- Support unquoted attr value recovery for jinja tags & blocks in [43fbf76](https://github.com/UnknownPlatypus/markup_fmt/commit/43fbf76adc1f18a21b0b6d1f9ebb4287af8e85ee) (See upstream [PR](https://github.com/g-plane/markup_fmt/pull/126))
+- expose ast and parser modules
 
 
 ## Notes for Vue and Svelte Users

@@ -1,11 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-mod ast;
+pub mod ast;
 pub mod config;
 mod ctx;
 mod error;
 mod helpers;
-mod parser;
+pub mod parser;
 mod printer;
 mod state;
 
