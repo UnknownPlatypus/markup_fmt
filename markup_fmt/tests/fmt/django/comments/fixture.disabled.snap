@@ -15,9 +15,46 @@ source: markup_fmt/tests/fmt.rs
         This is a very very very very very very very very very very very very long comment
         #}
     {% comment "commented-out template because we no longer use this" %}
-      {% for user in users %}
-        ...
-      {% endfor %}
-    {% endcomment %}
+
+        {% for user in users %}
+            ...
+        {% endfor %}
+
+        {% endcomment %}
+    {% comment %}
+            Props:
+              - form: AddStaffForm
+        {% endcomment %}
   </body>
 </html>
+{% comment %}
+    Props:
+    - reviews: list[Review]
+
+    Requirements:
+        CSS & JS needed
+        <link rel="stylesheet" href="...">
+        <script src="..."></script>
+{% endcomment %}
+
+<div>
+  <div>
+    <div>
+      {% comment %}{% if site_info.IS_RAVEN_INSTALLED %}
+<script>Raven.config('{% sentry_public_dsn %}').install()</script>
+    {% endif %}{% endcomment %}
+    </div>
+  </div>
+</div>
+
+<div>
+  <div>
+    <div>
+      {% comment %}
+{% if site_info.IS_RAVEN_INSTALLED %}
+<script>Raven.config('{% sentry_public_dsn %}').install()</script>
+{% endif %}
+    {% endcomment %}
+    </div>
+  </div>
+</div>

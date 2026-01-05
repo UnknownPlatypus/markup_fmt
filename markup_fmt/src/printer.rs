@@ -5,7 +5,7 @@ use crate::{
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
     helpers,
-    parser::parse_as_interpolated,
+    parser::{parse_as_interpolated, parse_jinja_tag_name},
     state::State,
 };
 use itertools::{EitherOrBoth, Itertools};
@@ -917,13 +917,24 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
+        let is_raw_content_block = self
+            .body
+            .first()
+            .is_some_and(|first| {
+                matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment"))
+            });
+
         Doc::list(
             self.body
                 .iter()
                 .map(|child| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => {
-                        format_control_structure_block_children(children, ctx, state)
+                        if is_raw_content_block {
+                            Doc::list(children.iter().map(|node| Doc::text(node.raw)).collect())
+                        } else {
+                            format_control_structure_block_children(children, ctx, state)
+                        }
                     }
                 })
                 .collect(),

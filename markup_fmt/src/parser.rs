@@ -1379,6 +1379,43 @@ impl<'s> Parser<'s> {
         Ok(children)
     }
 
+    fn parse_django_comment_content(&mut self) -> PResult<&'s str> {
+        let start = self
+            .chars
+            .peek()
+            .map(|(i, _)| *i)
+            .unwrap_or(self.source.len());
+
+        loop {
+            match self.chars.peek() {
+                Some((i, '{')) => {
+                    let i = *i;
+                    let mut chars = self.chars.clone();
+                    chars.next();
+                    if chars.next_if(|(_, c)| *c == '%').is_some() {
+                        let remaining = &self.source[i..];
+                        if remaining
+                            .trim_start_matches('{')
+                            .trim_start_matches('%')
+                            .trim_start_matches(['+', '-'])
+                            .trim_start()
+                            .starts_with("endcomment")
+                        {
+                            return Ok(unsafe { self.source.get_unchecked(start..i) });
+                        }
+                    }
+                    self.chars.next();
+                }
+                Some(..) => {
+                    self.chars.next();
+                }
+                None => {
+                    return Ok(unsafe { self.source.get_unchecked(start..self.source.len()) });
+                }
+            }
+        }
+    }
+
     fn parse_jinja_comment(&mut self) -> PResult<JinjaComment<'s>> {
         let Some((start, _)) = self
             .chars
@@ -1456,7 +1493,24 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if (matches!(
+        if matches!(self.language, Language::Django) && matches!(tag_name, "comment") {
+            let mut body = Vec::with_capacity(3);
+            body.push(JinjaTagOrChildren::Tag(first_tag));
+
+            let raw_content = self.parse_django_comment_content()?;
+            if !raw_content.is_empty() {
+                body.push(JinjaTagOrChildren::Children(vec![T::build(
+                    T::from_raw_text(raw_content),
+                    raw_content,
+                )]));
+            }
+
+            if let Ok(end_tag) = self.parse_jinja_tag() {
+                body.push(JinjaTagOrChildren::Tag(end_tag));
+            }
+
+            Ok(T::from_block(JinjaBlock { body }))
+        } else if (matches!(
             tag_name,
             "for"
                 | "if"
@@ -1479,7 +1533,6 @@ impl<'s> Parser<'s> {
                         | "blocktrans"
                         | "blocktranslate"
                         | "cache"
-                        | "comment"
                         | "filter"
                         | "for"
                         | "if"
@@ -1491,7 +1544,6 @@ impl<'s> Parser<'s> {
                         | "tag"
                         | "timezone"
                         | "upper"
-                        | "verbatim"
                         | "with"
                 )
                 || self.custom_blocks.iter().any(|s| s == tag_name))
@@ -3001,7 +3053,7 @@ fn is_attr_name_char(c: char) -> bool {
     !matches!(c, '"' | '\'' | '>' | '/' | '=') && !c.is_ascii_whitespace()
 }
 
-fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
+pub fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
     let trimmed = tag.content.trim_start_matches(['+', '-']).trim_start();
     trimmed
         .split_once(|c: char| c.is_ascii_whitespace())
@@ -3047,6 +3099,7 @@ trait HasJinjaFlowControl<'s>: Sized {
     fn build(intermediate: Self::Intermediate, raw: &'s str) -> Self;
     fn from_tag(tag: JinjaTag<'s>) -> Self::Intermediate;
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate;
+    fn from_raw_text(raw: &'s str) -> Self::Intermediate;
 }
 
 impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
@@ -3066,6 +3119,14 @@ impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate {
         NodeKind::JinjaBlock(block)
     }
+
+    fn from_raw_text(raw: &'s str) -> Self::Intermediate {
+        NodeKind::Text(TextNode {
+            raw,
+            line_breaks: raw.chars().filter(|c| *c == '\n').count(),
+            start: 0,
+        })
+    }
 }
 
 impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
@@ -3081,6 +3142,10 @@ impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
 
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate {
         Attribute::JinjaBlock(block)
+    }
+
+    fn from_raw_text(_raw: &'s str) -> Self::Intermediate {
+        unreachable!("raw text blocks should not appear in attributes")
     }
 }
 
