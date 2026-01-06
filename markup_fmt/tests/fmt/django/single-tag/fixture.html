@@ -4,3 +4,8 @@
 {%import 'forms.html' as forms%}
 
 {% include "root/long_directory_name/very_long_subdirectory_name/sidebar.html" ignore missing %}
+
+<div class="ds-flex lg:ds-hidden ds-items-center ds-justify-center ds-flex-col ds-gap-16 ds-shadow-md ds-w-full ds-p-14 ds-rounded-lg ds-mt-24">
+    <div class="ds-text-16 ds-font-bold">{% trans "Simulez votre projet solaire" %}</div>
+    <a class="ds-btn ds-w-full" href="{% url 'solar_quote_form' %}">{% trans "C'est parti !" %}</a>
+</div>

@@ -1456,23 +1456,21 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if (matches!(self.language, Language::Jinja | Language::Django)
-            && matches!(
-                tag_name,
-                "for"
-                    | "if"
-                    | "macro"
-                    | "call"
-                    | "filter"
-                    | "block"
-                    | "apply"
-                    | "autoescape"
-                    | "embed"
-                    | "with"
-                    | "trans"
-                    | "raw"
-            )
-            || tag_name == "set" && !first_tag.content.contains('='))
+        if (matches!(
+            tag_name,
+            "for"
+                | "if"
+                | "macro"
+                | "call"
+                | "filter"
+                | "block"
+                | "apply"
+                | "autoescape"
+                | "embed"
+                | "with"
+                | "raw"
+        ) || tag_name == "set" && !first_tag.content.contains('='))
+            || (matches!(self.language, Language::Jinja) && tag_name == "trans")
             || (matches!(self.language, Language::Django)
                 && matches!(
                     tag_name,
