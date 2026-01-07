@@ -1,11 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-mod ast;
+pub mod ast;
 pub mod config;
 mod ctx;
 mod error;
 mod helpers;
-mod parser;
+pub mod parser;
 mod printer;
 mod state;
 
@@ -55,7 +55,11 @@ pub fn format_text<E, F>(
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
-    let mut parser = Parser::new(code, language);
+    let mut parser = Parser::new(
+        code,
+        language,
+        options.language.custom_blocks.clone().unwrap_or_default(),
+    );
     let ast = parser.parse_root().map_err(FormatError::Syntax)?;
 
     if ast.children.first().is_some_and(|child| {

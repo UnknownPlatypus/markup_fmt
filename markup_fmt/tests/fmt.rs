@@ -7,7 +7,11 @@ fn fmt_snapshot() {
     let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,hbs,xml}";
     glob!(pattern, |path| {
         let input = fs::read_to_string(path).unwrap();
-        let language = detect_language(path).unwrap();
+        let language = if path.to_str().unwrap().contains("django") {
+            Language::Django
+        } else {
+            detect_language(path).unwrap()
+        };
 
         let options = fs::read_to_string(path.with_file_name("config.toml"))
             .map(|config_file| {

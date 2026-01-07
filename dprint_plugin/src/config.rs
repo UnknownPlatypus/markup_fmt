@@ -397,6 +397,17 @@ pub(crate) fn resolve_config(
                 }
             })
             .or(Some(ScriptFormatter::Dprint)),
+            custom_blocks: Some(
+                get_value::<String>(
+                    &mut config,
+                    "customBlocks",
+                    String::default(),
+                    &mut diagnostics,
+                )
+                .split(",")
+                .map(|s| s.trim().to_string())
+                .collect(),
+            ),
             ignore_comment_directive: get_value(
                 &mut config,
                 "ignoreCommentDirective",
