@@ -1,0 +1,15 @@
+[indent-spaces]
+scriptIndent = true
+useTabs = false
+
+[no-indent-spaces]
+scriptIndent = false
+useTabs = false
+
+[indent-tabs]
+scriptIndent = true
+useTabs = true
+
+[no-indent-tabs]
+scriptIndent = false
+useTabs = true

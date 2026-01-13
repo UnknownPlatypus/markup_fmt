@@ -1,0 +1,25 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<!DOCTYPE html>
+<html lang="en">
+	<body>
+		<script>
+		let b = 3;     // 4 spaces
+		    let b = 3;     // 4 spaces
+		let b = 3;         // 0 spaces
+		</script>
+
+		<script>
+		let b = 3;     // 4 spaces
+			let a = 0;     // 1 tab
+		let b = 3;         // 0 spaces
+		</script>
+
+		<script>
+		window.componentInitiators = [];             // 4 spaces
+		   window.dataLayer = window.dataLayer || [];   // 4 spaces
+		const foo = "";                              // 1 tab
+		</script>
+	</body>
+</html>
