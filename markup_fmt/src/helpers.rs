@@ -214,13 +214,19 @@ pub(crate) fn strip_indent(
             // skip the tab but add back (4-2)=2 spaces worth of padding
             let padding = char_width - remaining_indent;
             let rest = &s[byte_offset + c.len_utf8()..];
-            return normalize_leading_whitespace(&(" ".repeat(padding) + rest), indent_width, use_tabs);
+            return " ".repeat(padding) + rest;
         }
         remaining_indent -= char_width;
         byte_offset += c.len_utf8();
     }
 
-    normalize_leading_whitespace(&s[byte_offset..], indent_width, use_tabs)
+    // After stripping the base indent, normalize any remaining leading whitespace
+    let remaining = &s[byte_offset..];
+    if remaining.starts_with([' ', '\t']) {
+        normalize_leading_whitespace(remaining, indent_width, use_tabs)
+    } else {
+        remaining.to_owned()
+    }
 }
 
 fn normalize_leading_whitespace(s: &str, indent_width: usize, use_tabs: bool) -> String {

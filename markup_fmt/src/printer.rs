@@ -285,6 +285,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         let indent_width = ctx.indent_width;
+        let use_tabs = ctx.use_tabs;
 
         const PLACEHOLDER: &str = "$AstroTpl$";
         let script = self
@@ -321,7 +322,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                         line.chars().take_while(|c| c.is_ascii_whitespace()).count()
                     });
                     if script.contains('\n') {
-                        docs.extend(reflow_with_indent(script, false, ctx.indent_width, ctx.use_tabs));
+                        docs.extend(reflow_with_indent(script, false, indent_width, use_tabs));
                     } else {
                         docs.push(Doc::text(script.to_string()));
                     }
@@ -342,7 +343,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                 }
                 EitherOrBoth::Left(script) => {
                     if script.contains('\n') {
-                        docs.extend(reflow_with_indent(script, false, ctx.indent_width, ctx.use_tabs));
+                        docs.extend(reflow_with_indent(script, false, indent_width, use_tabs));
                     } else {
                         docs.push(Doc::text(script.to_string()));
                     }
@@ -2160,7 +2161,7 @@ fn reflow_with_indent<'i, 'o: 'i>(
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
-        let trimmed: String = if s.starts_with([' ', '\t']) {
+        let trimmed: String = if s.starts_with([' ', '\t']) && detect_indent {
             helpers::strip_indent(s, indent, indent_width, use_tabs)
         } else {
             s.to_owned()

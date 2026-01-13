@@ -12,7 +12,7 @@ source: markup_fmt/tests/fmt.rs
 
     <script>
     let b = 3;     // 4 spaces
-    	let a = 0;     // 1 tab
+      let a = 0;     // 1 tab
     let b = 3;         // 0 spaces
     </script>
 

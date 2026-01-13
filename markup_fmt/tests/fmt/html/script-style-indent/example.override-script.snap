@@ -16,7 +16,7 @@ source: markup_fmt/tests/fmt.rs
     /* --- */
     </style>
     <script>
-      window.addEventListener('load', () => {})
+    window.addEventListener('load', () => {})
     </script>
   </body>
 </html>
