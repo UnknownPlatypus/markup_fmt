@@ -18,7 +18,7 @@ source: markup_fmt/tests/fmt.rs
 
     <script>
     window.componentInitiators = [];             // 4 spaces
-       window.dataLayer = window.dataLayer || [];   // 4 spaces
+      window.dataLayer = window.dataLayer || [];   // 4 spaces
     const foo = "";                              // 1 tab
     </script>
   </body>

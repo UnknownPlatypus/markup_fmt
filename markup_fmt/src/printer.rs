@@ -63,6 +63,8 @@ impl<'s> DocGen<'s> for AngularFor<'s> {
                     .trim()
                     .trim_end_matches(';'),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ));
         });
         docs.push(Doc::text(") {"));
@@ -183,6 +185,8 @@ impl<'s> DocGen<'s> for AngularInterpolation<'s> {
             .concat(reflow_with_indent(
                 &ctx.format_expr(self.expr, false, self.start),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -255,7 +259,7 @@ impl<'s> DocGen<'s> for AstroAttribute<'s> {
     {
         let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         let expr = Doc::text("{")
-            .concat(reflow_with_indent(&expr_code, true))
+            .concat(reflow_with_indent(&expr_code, true, ctx.indent_width, ctx.use_tabs))
             .append(Doc::text("}"));
         if let Some(name) = self.name {
             if matches!(ctx.options.astro_attr_shorthand, Some(true)) && name == expr_code {
@@ -317,7 +321,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                         line.chars().take_while(|c| c.is_ascii_whitespace()).count()
                     });
                     if script.contains('\n') {
-                        docs.extend(reflow_with_indent(script, false));
+                        docs.extend(reflow_with_indent(script, false, ctx.indent_width, ctx.use_tabs));
                     } else {
                         docs.push(Doc::text(script.to_string()));
                     }
@@ -338,7 +342,7 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
                 }
                 EitherOrBoth::Left(script) => {
                     if script.contains('\n') {
-                        docs.extend(reflow_with_indent(script, false));
+                        docs.extend(reflow_with_indent(script, false, ctx.indent_width, ctx.use_tabs));
                     } else {
                         docs.push(Doc::text(script.to_string()));
                     }
@@ -391,7 +395,7 @@ impl<'s> DocGen<'s> for Comment<'s> {
         if ctx.options.format_comments {
             Doc::text("<!--")
                 .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim(), true))
+                .concat(reflow_with_indent(self.raw.trim(), true, ctx.indent_width, ctx.use_tabs))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("-->"))
@@ -734,7 +738,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                         ) {
                             Doc::hard_line().concat(reflow_owned(formatted.trim()))
                         } else {
-                            Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true))
+                            Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true, ctx.indent_width, ctx.use_tabs))
                         };
                         if is_script_indent {
                             docs.push(doc.nest(ctx.indent_width));
@@ -750,7 +754,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                     ) => {
                         let formatted = ctx.format_json(text_node.raw, text_node.start, &state);
                         docs.push(
-                            Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true)),
+                            Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true, ctx.indent_width, ctx.use_tabs)),
                         );
                     }
                     Some(..) => {
@@ -807,6 +811,8 @@ impl<'s> DocGen<'s> for Element<'s> {
                         .collect::<String>()
                         .trim(),
                     lang != "sass",
+                    ctx.indent_width,
+                    ctx.use_tabs,
                 ));
                 docs.push(
                     if ctx.style_indent() {
@@ -899,7 +905,7 @@ impl<'s> DocGen<'s> for FrontMatter<'s> {
             let formatted = ctx.format_script(self.raw, "tsx", self.start, state);
             Doc::text("---")
                 .append(Doc::hard_line())
-                .concat(reflow_with_indent(formatted.trim(), true))
+                .concat(reflow_with_indent(formatted.trim(), true, ctx.indent_width, ctx.use_tabs))
                 .append(Doc::hard_line())
                 .append(Doc::text("---"))
         } else {
@@ -960,7 +966,7 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
         if ctx.options.format_comments {
             Doc::text("{#")
                 .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim(), true))
+                .concat(reflow_with_indent(self.raw.trim(), true, ctx.indent_width, ctx.use_tabs))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("#}"))
@@ -988,6 +994,8 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
             .concat(reflow_with_indent(
                 ctx.format_jinja(self.expr, self.start, true, state).trim(),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -1029,6 +1037,8 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
             ctx.format_jinja(content, self.start + prefix.len(), false, state)
                 .trim(),
             true,
+            ctx.indent_width,
+            ctx.use_tabs,
         ));
         Doc::list(docs)
             .nest(ctx.indent_width)
@@ -1150,12 +1160,12 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                                 && self.name == formatted_expr =>
                             {
                                 Doc::text("{")
-                                    .concat(reflow_with_indent(&formatted_expr, true))
+                                    .concat(reflow_with_indent(&formatted_expr, true, ctx.indent_width, ctx.use_tabs))
                                     .append(Doc::text("}"))
                             }
                             _ => Doc::text(self.name.to_owned())
                                 .append(Doc::text("={"))
-                                .concat(reflow_with_indent(&formatted_expr, true))
+                                .concat(reflow_with_indent(&formatted_expr, true, ctx.indent_width, ctx.use_tabs))
                                 .append(Doc::text("}")),
                         };
                     } else {
@@ -1246,7 +1256,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 let value = format!("{{{binding_name}}}");
                 name.append(Doc::text("="))
                     .append(if ctx.options.strict_svelte_attr {
-                        format_attr_value(value, &ctx.options.quotes)
+                        format_attr_value(value, &ctx.options.quotes, ctx.indent_width, ctx.use_tabs)
                     } else {
                         Doc::text(value)
                     })
@@ -1367,7 +1377,7 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
     {
         let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         let expr = Doc::text("{")
-            .concat(reflow_with_indent(&expr_code, true))
+            .concat(reflow_with_indent(&expr_code, true, ctx.indent_width, ctx.use_tabs))
             .append(Doc::text("}"));
         if let Some(name) = self.name {
             match name.split_once(':') {
@@ -1388,6 +1398,8 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
                         name.append(format_attr_value(
                             format!("{{{expr_code}}}"),
                             &ctx.options.quotes,
+                            ctx.indent_width,
+                            ctx.use_tabs,
                         ))
                     } else {
                         name.append(expr)
@@ -1400,6 +1412,8 @@ impl<'s> DocGen<'s> for SvelteAttribute<'s> {
                 name.append(format_attr_value(
                     format!("{{{expr_code}}}"),
                     &ctx.options.quotes,
+                    ctx.indent_width,
+                    ctx.use_tabs,
                 ))
             } else {
                 name.append(expr)
@@ -1417,7 +1431,7 @@ impl<'s> DocGen<'s> for SvelteAttachment<'s> {
     {
         let expr_code = ctx.format_expr(self.expr.0, false, self.expr.1);
         Doc::text("{@attach ")
-            .concat(reflow_with_indent(&expr_code, true))
+            .concat(reflow_with_indent(&expr_code, true, ctx.indent_width, ctx.use_tabs))
             .append(Doc::text("}"))
     }
 }
@@ -1503,6 +1517,8 @@ impl<'s> DocGen<'s> for SvelteEachBlock<'s> {
         docs.extend(reflow_with_indent(
             &ctx.format_expr(self.expr.0, false, self.expr.1),
             false,
+            ctx.indent_width,
+            ctx.use_tabs,
         ));
         if let Some(binding) = self.binding {
             docs.push(Doc::text(" as "));
@@ -1598,6 +1614,8 @@ impl<'s> DocGen<'s> for SvelteInterpolation<'s> {
             .concat(reflow_with_indent(
                 &ctx.format_expr(self.expr.0, false, self.expr.1),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_nil())
@@ -1723,7 +1741,7 @@ impl<'s> DocGen<'s> for VentoComment<'s> {
         if ctx.options.format_comments {
             Doc::text("{{#")
                 .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim(), true))
+                .concat(reflow_with_indent(self.raw.trim(), true, ctx.indent_width, ctx.use_tabs))
                 .nest(ctx.indent_width)
                 .append(Doc::line_or_space())
                 .append(Doc::text("#}}"))
@@ -1748,6 +1766,8 @@ impl<'s> DocGen<'s> for VentoEval<'s> {
                     .trim()
                     .trim_end_matches(';'),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -1771,7 +1791,7 @@ impl<'s> DocGen<'s> for VentoInterpolation<'s> {
             .concat(itertools::intersperse(
                 self.expr.split("|>").map(|expr| {
                     Doc::list(
-                        reflow_with_indent(&ctx.format_expr(expr, false, self.start), true)
+                        reflow_with_indent(&ctx.format_expr(expr, false, self.start), true, ctx.indent_width, ctx.use_tabs)
                             .collect(),
                     )
                 }),
@@ -1850,28 +1870,30 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                                 .concat(reflow_with_indent(
                                     &ctx.format_expr(template, false, 0),
                                     true,
+                                    ctx.indent_width,
+                                    ctx.use_tabs,
                                 ))
                                 .append(Doc::text(" "))
-                                .concat(reflow_with_indent(&ctx.format_expr(data, false, 0), true))
+                                .concat(reflow_with_indent(&ctx.format_expr(data, false, 0), true, ctx.indent_width, ctx.use_tabs))
                         } else {
                             Doc::text(tag_name.to_string()).append(Doc::space()).concat(
-                                reflow_with_indent(&ctx.format_expr(parsed_tag.1, false, 0), true),
+                                reflow_with_indent(&ctx.format_expr(parsed_tag.1, false, 0), true, ctx.indent_width, ctx.use_tabs),
                             )
                         }
                     } else if parsed_tag.0 == "function" || parsed_tag.1.starts_with("function") {
                         // unsupported at present
-                        Doc::list(reflow_with_indent(item.trim(), true).collect())
+                        Doc::list(reflow_with_indent(item.trim(), true, ctx.indent_width, ctx.use_tabs).collect())
                     } else if let (tag_name @ ("set" | "export"), rest) = parsed_tag {
                         if let Some((binding, expr)) = rest.trim().split_once('=') {
                             Doc::text(tag_name.to_string())
                                 .append(Doc::space())
-                                .concat(reflow_with_indent(&ctx.format_binding(binding, 0), true))
+                                .concat(reflow_with_indent(&ctx.format_binding(binding, 0), true, ctx.indent_width, ctx.use_tabs))
                                 .append(Doc::text(" = "))
-                                .concat(reflow_with_indent(&ctx.format_expr(expr, false, 0), true))
+                                .concat(reflow_with_indent(&ctx.format_expr(expr, false, 0), true, ctx.indent_width, ctx.use_tabs))
                         } else {
                             Doc::text(tag_name.to_string())
                                 .append(Doc::space())
-                                .concat(reflow_with_indent(&ctx.format_binding(rest, 0), true))
+                                .concat(reflow_with_indent(&ctx.format_binding(rest, 0), true, ctx.indent_width, ctx.use_tabs))
                         }
                     } else if let ("import", _) = parsed_tag {
                         Doc::list(
@@ -1880,11 +1902,13 @@ impl<'s> DocGen<'s> for VentoTag<'s> {
                                     .trim()
                                     .trim_end_matches(';'),
                                 true,
+                                ctx.indent_width,
+                                ctx.use_tabs
                             )
                             .collect(),
                         )
                     } else {
-                        Doc::list(reflow_with_indent(item.trim(), true).collect())
+                        Doc::list(reflow_with_indent(item.trim(), true, ctx.indent_width, ctx.use_tabs).collect())
                     }
                 }),
                 Doc::line_or_space()
@@ -2055,14 +2079,14 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
                 && matches!(self.arg_and_modifiers, Some(arg_and_modifiers) if arg_and_modifiers == value))
             {
                 docs.push(Doc::text("="));
-                docs.push(format_attr_value(value, &ctx.options.quotes));
+                docs.push(format_attr_value(value, &ctx.options.quotes, ctx.indent_width, ctx.use_tabs));
             }
         } else if matches!(ctx.options.v_bind_same_name_short_hand, Some(false))
             && is_v_bind
             && let Some(arg_and_modifiers) = self.arg_and_modifiers
         {
             docs.push(Doc::text("="));
-            docs.push(format_attr_value(arg_and_modifiers, &ctx.options.quotes));
+            docs.push(format_attr_value(arg_and_modifiers, &ctx.options.quotes, ctx.indent_width, ctx.use_tabs));
         }
 
         Doc::list(docs)
@@ -2079,6 +2103,8 @@ impl<'s> DocGen<'s> for VueInterpolation<'s> {
             .concat(reflow_with_indent(
                 &ctx.format_expr(self.expr, false, self.start),
                 true,
+                ctx.indent_width,
+                ctx.use_tabs,
             ))
             .nest(ctx.indent_width)
             .append(Doc::line_or_space())
@@ -2123,19 +2149,21 @@ fn reflow_owned<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
 fn reflow_with_indent<'i, 'o: 'i>(
     s: &'i str,
     detect_indent: bool,
+    indent_width: usize,
+    use_tabs: bool,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
     let indent = if detect_indent {
-        helpers::detect_indent(s)
+        helpers::detect_indent(s, indent_width)
     } else {
         0
     };
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
-        let trimmed = if s.starts_with([' ', '\t']) {
-            s.get(indent..).unwrap_or(s)
+        let trimmed: String = if s.starts_with([' ', '\t']) {
+            helpers::strip_indent(s, indent, indent_width, use_tabs)
         } else {
-            s
+            s.to_owned()
         };
         let should_keep_raw = matches!(pair_stack.last(), Some('`'));
 
@@ -2191,7 +2219,7 @@ fn reflow_with_indent<'i, 'o: 'i>(
             if should_keep_raw {
                 Doc::text(s.to_owned())
             } else {
-                Doc::text(trimmed.to_owned())
+                Doc::text(trimmed)
             },
         ]
         .into_iter()
@@ -2336,7 +2364,7 @@ fn has_two_more_non_text_children(children: &[Node], language: Language) -> bool
         > 1
 }
 
-fn format_attr_value(value: impl AsRef<str>, quotes: &Quotes) -> Doc<'_> {
+fn format_attr_value(value: impl AsRef<str>, quotes: &Quotes, indent_width: usize, use_tabs: bool) -> Doc<'_> {
     let value = value.as_ref();
     let quote = if value.contains('"') {
         Doc::text("'")
@@ -2349,7 +2377,7 @@ fn format_attr_value(value: impl AsRef<str>, quotes: &Quotes) -> Doc<'_> {
     };
     quote
         .clone()
-        .concat(reflow_with_indent(value, true))
+        .concat(reflow_with_indent(value, true, indent_width, use_tabs))
         .append(quote)
 }
 
@@ -2664,6 +2692,8 @@ where
         .concat(reflow_with_indent(
             &ctx.format_stmt_header(fake_keyword, code),
             true,
+            ctx.indent_width,
+            ctx.use_tabs,
         ))
 }
 

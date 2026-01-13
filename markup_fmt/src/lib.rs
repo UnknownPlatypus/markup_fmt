@@ -81,6 +81,7 @@ where
         language,
         indent_width: options.layout.indent_width,
         print_width: options.layout.print_width,
+        use_tabs: options.layout.use_tabs,
         options: &options.language,
         external_formatter,
         external_formatter_errors: Default::default(),

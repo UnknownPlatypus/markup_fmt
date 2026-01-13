@@ -174,18 +174,81 @@ pub(crate) fn parse_vento_tag(tag: &str) -> (&str, &str) {
 pub(crate) static UNESCAPING_AC: LazyLock<AhoCorasick> =
     LazyLock::new(|| AhoCorasick::new(["&quot;", "&#x22;", "&#x27;"]).unwrap());
 
-pub(crate) fn detect_indent(s: &str) -> usize {
+pub(crate) fn detect_indent(s: &str, indent_width: usize) -> usize {
     s.lines()
         .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            line.as_bytes()
-                .iter()
-                .take_while(|byte| byte.is_ascii_whitespace())
-                .count()
-        })
+        .map(|line| visual_indent_width(line, indent_width))
         .min()
         .unwrap_or_default()
+}
+
+pub(crate) fn visual_indent_width(s: &str, indent_width: usize) -> usize {
+    s.chars()
+        .take_while(|c| c.is_ascii_whitespace())
+        .map(|c| if c == '\t' { indent_width } else { 1 })
+        .sum()
+}
+
+pub(crate) fn strip_indent(
+    s: &str,
+    indent: usize,
+    indent_width: usize,
+    use_tabs: bool,
+) -> String {
+    let mut remaining_indent = indent;
+    let mut byte_offset = 0;
+
+    // Skip characters that make up the base indent
+    for c in s.chars() {
+        if remaining_indent == 0 {
+            break;
+        }
+        if !c.is_ascii_whitespace() {
+            break;
+        }
+        let char_width = if c == '\t' { indent_width } else { 1 };
+        if char_width > remaining_indent {
+            // Tab is wider than remaining indent - need to replace with spaces
+            // E.g., if remaining_indent is 2 and we hit a tab (width 4), we need to
+            // skip the tab but add back (4-2)=2 spaces worth of padding
+            let padding = char_width - remaining_indent;
+            let rest = &s[byte_offset + c.len_utf8()..];
+            return normalize_leading_whitespace(&(" ".repeat(padding) + rest), indent_width, use_tabs);
+        }
+        remaining_indent -= char_width;
+        byte_offset += c.len_utf8();
+    }
+
+    normalize_leading_whitespace(&s[byte_offset..], indent_width, use_tabs)
+}
+
+fn normalize_leading_whitespace(s: &str, indent_width: usize, use_tabs: bool) -> String {
+    // Calculate the visual width of leading whitespace
+    let mut visual_width = 0;
+    let mut whitespace_end = 0;
+    for c in s.chars() {
+        if !c.is_ascii_whitespace() {
+            break;
+        }
+        visual_width += if c == '\t' { indent_width } else { 1 };
+        whitespace_end += c.len_utf8();
+    }
+
+    if visual_width == 0 {
+        return s.to_owned();
+    }
+
+    // Normalize to tabs or spaces
+    let normalized_indent = if use_tabs {
+        let tabs = visual_width / indent_width;
+        let spaces = visual_width % indent_width;
+        "\t".repeat(tabs) + &" ".repeat(spaces)
+    } else {
+        " ".repeat(visual_width)
+    };
+
+    normalized_indent + &s[whitespace_end..]
 }
 
 pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {

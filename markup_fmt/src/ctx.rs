@@ -17,6 +17,7 @@ where
     pub(crate) language: Language,
     pub(crate) indent_width: usize,
     pub(crate) print_width: usize,
+    pub(crate) use_tabs: bool,
     pub(crate) options: &'b LanguageOptions,
     pub(crate) external_formatter: F,
     pub(crate) external_formatter_errors: Vec<E>,
