@@ -1569,7 +1569,7 @@ impl<'s> Parser<'s> {
                         break;
                     }
                     if (tag_name == "if" || tag_name == "for")
-                        && matches!(next_tag_name, "elif" | "elseif" | "else")
+                        && matches!(next_tag_name, "elif" | "elseif" | "else" | "empty")
                     {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
                     } else if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {

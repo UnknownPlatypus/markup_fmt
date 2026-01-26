@@ -13,6 +13,7 @@ markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nun
 - Converge in one pass when formatting a style attr with malva in [05b33f0](https://github.com/UnknownPlatypus/markup_fmt/commit/05b33f0576a05b34cf7ba1180c2d4d7e5e9f3231) (See upstream [PR](https://github.com/g-plane/markup_fmt/pull/113))
 - expose ast and parser modules
 - Don't format django multiline comment tags (`{% comment %}...{% endcomment %}`) in [16417e7](https://github.com/UnknownPlatypus/markup_fmt/commit/16417e72d18ec2a3da6ebf1ed5ce7100704d3d5f)
+- Fix indent of `{% for %}`/`{% empty %}` blocks
 
 ## Notes for Vue and Svelte Users
 
