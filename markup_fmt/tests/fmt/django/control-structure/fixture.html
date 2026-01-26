@@ -47,3 +47,9 @@ Sold-out!
 <title>{% block title %}{% endblock %}</title>
 
 {% if kenny.sick %}{% include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg" %}{% endif %}
+
+{% for file in profile.files.all %}
+<li><a href="{{ file.url }}">{{ file }}</a></li>
+{% empty %}
+<li><em>None</em></li>
+{% endfor %}
