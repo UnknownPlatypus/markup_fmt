@@ -50,7 +50,7 @@ impl Default for LayoutOptions {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum LineBreak {
@@ -287,7 +287,7 @@ impl Default for LanguageOptions {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum Quotes {
@@ -296,7 +296,7 @@ pub enum Quotes {
     Single,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum ClosingTagLineBreakForEmpty {
@@ -306,7 +306,7 @@ pub enum ClosingTagLineBreakForEmpty {
     Never,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum WhitespaceSensitivity {
@@ -316,7 +316,7 @@ pub enum WhitespaceSensitivity {
     Ignore,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum DoctypeKeywordCase {
@@ -326,7 +326,7 @@ pub enum DoctypeKeywordCase {
     Lower,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum VBindStyle {
@@ -335,7 +335,7 @@ pub enum VBindStyle {
     Long,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum VOnStyle {
@@ -344,7 +344,7 @@ pub enum VOnStyle {
     Long,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum VForDelimiterStyle {
@@ -353,7 +353,7 @@ pub enum VForDelimiterStyle {
     Of,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum VSlotStyle {
@@ -364,7 +364,7 @@ pub enum VSlotStyle {
     VSlot,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum VueComponentCase {
@@ -379,7 +379,7 @@ pub enum VueComponentCase {
     KebabCase,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "config_serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "config_serde", serde(rename_all = "kebab-case"))]
 pub enum ScriptFormatter {

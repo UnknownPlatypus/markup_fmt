@@ -88,8 +88,7 @@ where
                 matches!(
                     self.options
                         .component_whitespace_sensitivity
-                        .clone()
-                        .unwrap_or(self.options.whitespace_sensitivity.clone()),
+                        .unwrap_or(self.options.whitespace_sensitivity),
                     WhitespaceSensitivity::Css | WhitespaceSensitivity::Strict
                 )
             }
@@ -144,14 +143,17 @@ where
             // Trim original code before sending it to the external formatter.
             // This makes sure the code will be trimmed
             // though external formatter isn't available.
-            let wrapped = if code.trim_start().starts_with('{') {
+            let preprocessed = code.trim_start();
+            let will_add_brackets =
+                preprocessed.starts_with('{') || preprocessed.starts_with("...");
+            let wrapped = if will_add_brackets {
                 self.source
                     .get(0..start.saturating_sub(1))
                     .unwrap_or_default()
                     .replace(|c: char| !c.is_ascii_whitespace(), " ")
-                    + "("
+                    + "["
                     + code.trim()
-                    + ")"
+                    + "]"
             } else {
                 self.source
                     .get(0..start)
@@ -168,25 +170,13 @@ where
                     ext: "tsx",
                 },
             )?;
-            let formatted = formatted.trim_matches(|c: char| c.is_ascii_whitespace() || c == ';');
-            let formatted = if code.trim_start().chars().take_while(|c| *c == '(').count()
-                < formatted.chars().take_while(|c| *c == '(').count()
-                && code
-                    .trim_end()
-                    .chars()
-                    .rev()
-                    .take_while(|c| *c == ')')
-                    .count()
-                    < formatted.chars().rev().take_while(|c| *c == ')').count()
-            {
-                formatted
-                    .trim_ascii()
-                    .strip_prefix('(')
-                    .and_then(|s| s.strip_suffix(')'))
-                    .unwrap_or(formatted)
-            } else {
-                formatted
-            };
+            let mut formatted =
+                formatted.trim_matches(|c: char| c.is_ascii_whitespace() || c == ';');
+            formatted = trim_delim(preprocessed, formatted, '[', ']');
+            formatted = trim_delim(preprocessed, formatted, '(', ')');
+            if will_add_brackets {
+                formatted = formatted.trim_ascii_end().trim_end_matches(',');
+            }
             Ok(formatted.trim_ascii().to_owned())
         }
     }
@@ -446,4 +436,29 @@ pub struct Hints<'s> {
     pub attr: bool,
     /// Fake file extension.
     pub ext: &'s str,
+}
+
+fn trim_delim<'a>(user_input: &str, formatted: &'a str, start: char, end: char) -> &'a str {
+    if user_input
+        .trim_start()
+        .chars()
+        .take_while(|c| *c == start)
+        .count()
+        < formatted.chars().take_while(|c| *c == start).count()
+        && user_input
+            .trim_end()
+            .chars()
+            .rev()
+            .take_while(|c| *c == end)
+            .count()
+            < formatted.chars().rev().take_while(|c| *c == end).count()
+    {
+        formatted
+            .trim_ascii()
+            .strip_prefix(start)
+            .and_then(|s| s.strip_suffix(end))
+            .unwrap_or(formatted)
+    } else {
+        formatted
+    }
 }
