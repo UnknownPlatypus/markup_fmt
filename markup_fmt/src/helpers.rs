@@ -102,7 +102,7 @@ pub(crate) fn is_whitespace_sensitive_tag(name: &str, language: Language) -> boo
                         .iter()
                         .any(|tag| tag.eq_ignore_ascii_case(name))
         }
-        Language::Xml => true,
+        Language::Xml => false,
         _ => {
             name == "a"
                 || !NON_WS_SENSITIVE_TAGS.contains(&name)
@@ -286,4 +286,15 @@ pub(crate) fn should_be_space_separated(name: &str, state: &State) -> bool {
                 .current_tag_name
                 .map(|name| name.eq_ignore_ascii_case("form"))
                 .unwrap_or_default()
+}
+
+pub(crate) fn has_template_interpolation(s: &str, language: Language) -> bool {
+    match language {
+        Language::Html | Language::Xml => false,
+        Language::Svelte | Language::Astro => s.contains('{'),
+        Language::Vue | Language::Angular => s.contains("{{"),
+        Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
+            s.contains("{{") || s.contains("{%")
+        }
+    }
 }
