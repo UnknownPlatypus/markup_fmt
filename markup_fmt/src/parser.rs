@@ -1478,7 +1478,8 @@ impl<'s> Parser<'s> {
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
 
             loop {
-                let mut children = self.parse_jinja_block_children(tag_name, tag_start, children_parser)?;
+                let mut children =
+                    self.parse_jinja_block_children(tag_name, tag_start, children_parser)?;
                 if !children.is_empty() {
                     if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
                         nodes.append(&mut children);
@@ -1495,8 +1496,11 @@ impl<'s> Parser<'s> {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
                         break;
                     }
-                    if (tag_name == "if" || tag_name == "for")
-                        && matches!(next_tag_name, "elif" | "elseif" | "else" | "empty")
+                    if tag_name == "if" && matches!(next_tag_name, "elif" | "elseif" | "else")
+                        || tag_name == "for" && matches!(next_tag_name, "else" | "empty")
+                        || tag_name == "ifchanged" && next_tag_name == "else"
+                        || matches!(tag_name, "blocktrans" | "blocktranslate")
+                            && next_tag_name == "plural"
                     {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
                     } else if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
