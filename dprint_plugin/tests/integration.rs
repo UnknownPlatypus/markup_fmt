@@ -36,7 +36,7 @@ fn integration_with_dprint_ts_snapshot() {
                     indent_width: Some(options.layout.indent_width as u8),
                     ..Default::default()
                 };
-                if let Some(syntax) = malva::detect_syntax(&Path::new("file").with_extension(ext)) {
+                if let Some(syntax) = malva::detect_syntax(Path::new("file").with_extension(ext)) {
                     malva::format_text(
                         code,
                         syntax,
