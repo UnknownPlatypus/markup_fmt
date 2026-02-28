@@ -1,10 +1,11 @@
+use crate::helpers::should_be_space_separated;
 use crate::{
     Language,
     ast::*,
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
     helpers,
-    parser::parse_as_interpolated,
+    parser::{parse_as_interpolated, parse_jinja_tag_name},
     state::State,
 };
 use itertools::{EitherOrBoth, Itertools};
@@ -440,7 +441,11 @@ impl<'s> DocGen<'s> for Element<'s> {
             .and_then(|(namespace, name)| namespace.eq_ignore_ascii_case("html").then_some(name))
             .unwrap_or(self.tag_name);
         let formatted_tag_name = match ctx.language {
-            Language::Html | Language::Jinja | Language::Vento | Language::Mustache
+            Language::Html
+            | Language::Jinja
+            | Language::Django
+            | Language::Vento
+            | Language::Mustache
                 if css_dataset::tags::STANDARD_HTML_TAGS
                     .iter()
                     .any(|tag| tag.eq_ignore_ascii_case(self.tag_name)) =>
@@ -636,29 +641,13 @@ impl<'s> DocGen<'s> for Element<'s> {
         let has_two_more_non_text_children =
             has_two_more_non_text_children(&self.children, ctx.language);
 
-        let (leading_ws, trailing_ws) = if is_empty
-            || ctx.language == Language::Xml
-                && matches!(
-                    &*self.children,
-                    [Node {
-                        kind: NodeKind::Text(..),
-                        ..
-                    }]
-                ) {
-            (Doc::nil(), Doc::nil())
-        } else if is_whitespace_sensitive {
-            (
-                format_ws_sensitive_leading_ws(&self.children),
-                format_ws_sensitive_trailing_ws(&self.children),
-            )
-        } else if has_two_more_non_text_children {
-            (Doc::hard_line(), Doc::hard_line())
-        } else {
-            (
-                format_ws_insensitive_leading_ws(&self.children),
-                format_ws_insensitive_trailing_ws(&self.children),
-            )
-        };
+        let (leading_ws, trailing_ws) = format_leading_trailing_ws(
+            &self.children,
+            is_empty,
+            is_whitespace_sensitive,
+            has_two_more_non_text_children,
+            ctx,
+        );
 
         if tag_name.eq_ignore_ascii_case("script") && ctx.language != Language::Xml {
             if let [
@@ -797,7 +786,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                             .split(PLACEHOLDER)
                             .map(Cow::from)
                             .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
-                                Language::Jinja => Cow::from(format!(
+                                Language::Jinja | Language::Django => Cow::from(format!(
                                     "{{{{ {} }}}}",
                                     ctx.format_jinja(expr, *start, true, &state),
                                 )),
@@ -943,13 +932,24 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
+        let is_raw_content_block = self
+            .body
+            .first()
+            .is_some_and(|first| {
+                matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment"))
+            });
+
         Doc::list(
             self.body
                 .iter()
                 .map(|child| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => {
-                        format_control_structure_block_children(children, ctx, state)
+                        if is_raw_content_block {
+                            Doc::list(children.iter().map(|node| Doc::text(node.raw)).collect())
+                        } else {
+                            format_control_structure_block_children(children, ctx, state)
+                        }
                     }
                 })
                 .collect(),
@@ -963,13 +963,17 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
         if ctx.options.format_comments {
-            Doc::text("{#")
-                .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim(), true))
-                .nest(ctx.indent_width)
-                .append(Doc::line_or_space())
-                .append(Doc::text("#}"))
-                .group()
+            match ctx.language {
+                Language::Jinja => Doc::text("{#")
+                    .append(Doc::line_or_space())
+                    .concat(reflow_with_indent(self.raw.trim(), true))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text("#}"))
+                    .group(),
+                Language::Django => Doc::text(format!("{{# {} #}}", self.raw.trim())),
+                _ => unreachable!(),
+            }
         } else {
             Doc::text("{#")
                 .concat(reflow_raw(self.raw))
@@ -983,26 +987,30 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        Doc::text("{{")
-            .append(if self.trim_prev {
-                Doc::text("-")
-            } else {
-                Doc::nil()
-            })
-            .append(Doc::line_or_space())
-            .concat(reflow_with_indent(
-                ctx.format_jinja(self.expr, self.start, true, state).trim(),
-                true,
-            ))
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(if self.trim_next {
-                Doc::text("-")
-            } else {
-                Doc::nil()
-            })
-            .append(Doc::text("}}"))
-            .group()
+        match ctx.language {
+            Language::Jinja => Doc::text("{{")
+                .append(if self.trim_prev {
+                    Doc::text("-")
+                } else {
+                    Doc::nil()
+                })
+                .append(Doc::line_or_space())
+                .concat(reflow_with_indent(
+                    ctx.format_jinja(self.expr, self.start, true, state).trim(),
+                    true,
+                ))
+                .nest(ctx.indent_width)
+                .append(Doc::line_or_space())
+                .append(if self.trim_next {
+                    Doc::text("-")
+                } else {
+                    Doc::nil()
+                })
+                .append(Doc::text("}}"))
+                .group(),
+            Language::Django => Doc::text(format!("{{{{ {} }}}}", self.expr.trim())),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -1011,36 +1019,42 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
     {
-        let (prefix, content) = if let Some(content) = self.content.strip_prefix('-') {
-            ("-", content)
-        } else if let Some(content) = self.content.strip_prefix('+') {
-            ("+", content)
-        } else {
-            ("", self.content)
-        };
-        let (content, suffix) = if let Some(content) = content.strip_suffix('-') {
-            (content, "-")
-        } else if let Some(content) = content.strip_suffix('+') {
-            (content, "+")
-        } else {
-            (content, "")
-        };
+        match ctx.language {
+            Language::Jinja => {
+                let (prefix, content) = if let Some(content) = self.content.strip_prefix('-') {
+                    ("-", content)
+                } else if let Some(content) = self.content.strip_prefix('+') {
+                    ("+", content)
+                } else {
+                    ("", self.content)
+                };
+                let (content, suffix) = if let Some(content) = content.strip_suffix('-') {
+                    (content, "-")
+                } else if let Some(content) = content.strip_suffix('+') {
+                    (content, "+")
+                } else {
+                    (content, "")
+                };
 
-        let mut docs = Vec::with_capacity(5);
-        docs.push(Doc::text("{%"));
-        docs.push(Doc::text(prefix));
-        docs.push(Doc::line_or_space());
-        docs.extend(reflow_with_indent(
-            ctx.format_jinja(content, self.start + prefix.len(), false, state)
-                .trim(),
-            true,
-        ));
-        Doc::list(docs)
-            .nest(ctx.indent_width)
-            .append(Doc::line_or_space())
-            .append(Doc::text(suffix))
-            .append(Doc::text("%}"))
-            .group()
+                let mut docs = Vec::with_capacity(5);
+                docs.push(Doc::text("{%"));
+                docs.push(Doc::text(prefix));
+                docs.push(Doc::line_or_space());
+                docs.extend(reflow_with_indent(
+                    ctx.format_jinja(content, self.start + prefix.len(), false, state)
+                        .trim(),
+                    true,
+                ));
+                Doc::list(docs)
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(suffix))
+                    .append(Doc::text("%}"))
+                    .group()
+            }
+            Language::Django => Doc::text(format!("{{% {} %}}", self.content.trim())),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -1187,7 +1201,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             let mut docs = Vec::with_capacity(5);
             docs.push(name);
             docs.push(Doc::text("="));
-            if self.name.eq_ignore_ascii_case("class") {
+            if should_be_space_separated(self.name, state) {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
@@ -1224,7 +1238,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                             Language::Svelte => {
                                 Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, *start),))
                             }
-                            Language::Jinja => Cow::from(format!(
+                            Language::Jinja | Language::Django => Cow::from(format!(
                                 "{{{{ {} }}}}",
                                 ctx.format_jinja(expr, *start, true, state),
                             )),
@@ -2249,6 +2263,8 @@ fn is_all_ascii_whitespace(s: &str) -> bool {
 
 fn is_multi_line_attr(attr: &Attribute) -> bool {
     match attr {
+        // External formatter (Malva) always format style attr on a single line (see `singleLineTopLevelDeclarations`)
+        Attribute::Native(attr) if attr.name.eq_ignore_ascii_case("style") => false,
         Attribute::Native(attr) => attr
             .value
             .is_some_and(|(value, _)| value.trim().contains('\n')),
@@ -2653,6 +2669,42 @@ where
     }
 }
 
+fn format_leading_trailing_ws<'s, E, F>(
+    children: &[Node<'s>],
+    is_empty: bool,
+    is_whitespace_sensitive: bool,
+    has_two_more_non_text_children: bool,
+    ctx: &Ctx<'s, E, F>,
+) -> (Doc<'s>, Doc<'s>)
+where
+    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+{
+    if is_empty
+        || ctx.language == Language::Xml
+            && matches!(
+                children,
+                [Node {
+                    kind: NodeKind::Text(..),
+                    ..
+                }]
+            )
+    {
+        (Doc::nil(), Doc::nil())
+    } else if is_whitespace_sensitive {
+        (
+            format_ws_sensitive_leading_ws(children),
+            format_ws_sensitive_trailing_ws(children),
+        )
+    } else if has_two_more_non_text_children {
+        (Doc::hard_line(), Doc::hard_line())
+    } else {
+        (
+            format_ws_insensitive_leading_ws(children),
+            format_ws_insensitive_trailing_ws(children),
+        )
+    }
+}
+
 fn format_control_structure_block_children<'s, E, F>(
     children: &[Node<'s>],
     ctx: &mut Ctx<'s, E, F>,
@@ -2661,6 +2713,16 @@ fn format_control_structure_block_children<'s, E, F>(
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
 {
+    let is_whitespace_sensitive = state
+        .current_tag_name
+        .is_none_or(|current_tag_name| ctx.is_whitespace_sensitive(current_tag_name));
+    let (leading_ws, trailing_ws) = format_leading_trailing_ws(
+        children,
+        is_empty_element(children, is_whitespace_sensitive),
+        is_whitespace_sensitive,
+        has_two_more_non_text_children(children, ctx.language),
+        ctx,
+    );
     match children {
         [
             Node {
@@ -2668,12 +2730,12 @@ where
                 ..
             },
         ] if is_all_ascii_whitespace(text_node.raw) => Doc::line_or_space(),
-        _ => format_ws_sensitive_leading_ws(children)
+        _ => leading_ws
             .append(format_children_without_inserting_linebreak(
                 children, ctx, state,
             ))
             .nest(ctx.indent_width)
-            .append(format_ws_sensitive_trailing_ws(children)),
+            .append(trailing_ws),
     }
 }
 

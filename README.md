@@ -5,6 +5,17 @@
 markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nunjucks, Vento, Mustache, Handlebars and XML formatter.
 </p>
 
+## Additions in this fork
+
+- Support for Django templates in [2d418d6](https://github.com/UnknownPlatypus/markup_fmt/commit/2d418d62e59f1eb80d77fc6aaf717181d3dce30c) 
+- Support configuring a list of custom blocks with `--custom-blocks "markdown,flatblock"` in [b73a519](https://github.com/UnknownPlatypus/markup_fmt/commit/b73a519e79a978ae344f0523a1f1cbfa9fad0755)
+- Converge in one pass when formatting a style attr with malva in [05b33f0](https://github.com/UnknownPlatypus/markup_fmt/commit/05b33f0576a05b34cf7ba1180c2d4d7e5e9f3231) (See upstream [PR](https://github.com/g-plane/markup_fmt/pull/113))
+- expose ast and parser modules
+- Don't format django multiline comment tags (`{% comment %}...{% endcomment %}`) in [16417e7](https://github.com/UnknownPlatypus/markup_fmt/commit/16417e72d18ec2a3da6ebf1ed5ce7100704d3d5f)
+- Fix indent of `{% for %}`/`{% empty %}` blocks
+- Fix formatting of some intermediate tags like `{% plural %}` inside `{% blocktranslate %}`
+- Improve formatting of django blocks following whitespace sensitivity
+
 ## Notes for Vue and Svelte Users
 
 This formatter provides some options such as `vBindStyle`, `vOnStyle` and more for Vue and

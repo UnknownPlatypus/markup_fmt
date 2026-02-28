@@ -23,6 +23,7 @@ pub enum Language {
     Astro,
     Angular,
     Jinja,
+    Django,
     Vento,
     Mustache,
     Xml,
@@ -31,6 +32,7 @@ pub enum Language {
 pub struct Parser<'s> {
     source: &'s str,
     language: Language,
+    custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     state: ParserState,
 }
@@ -41,10 +43,11 @@ struct ParserState {
 }
 
 impl<'s> Parser<'s> {
-    pub fn new(source: &'s str, language: Language) -> Self {
+    pub fn new(source: &'s str, language: Language, custom_blocks: Vec<String>) -> Self {
         Self {
             source,
             language,
+            custom_blocks,
             chars: source.char_indices().peekable(),
             state: Default::default(),
         }
@@ -717,7 +720,7 @@ impl<'s> Parser<'s> {
                 .try_parse(Parser::parse_astro_attr)
                 .map(Attribute::Astro)
                 .or_else(|_| self.parse_native_attr().map(Attribute::Native)),
-            Language::Jinja => {
+            Language::Jinja | Language::Django => {
                 self.skip_ws();
                 let result = if matches!(self.chars.peek(), Some((_, '{'))) {
                     let mut chars = self.chars.clone();
@@ -745,7 +748,7 @@ impl<'s> Parser<'s> {
     fn parse_attr_name(&mut self) -> PResult<&'s str> {
         if matches!(
             self.language,
-            Language::Jinja | Language::Vento | Language::Mustache
+            Language::Jinja | Language::Django | Language::Vento | Language::Mustache
         ) {
             let Some((start, mut end)) = (match self.chars.peek() {
                 Some((i, '{')) => {
@@ -816,7 +819,11 @@ impl<'s> Parser<'s> {
         if let Some((start, quote)) = quote {
             let can_interpolate = matches!(
                 self.language,
-                Language::Svelte | Language::Jinja | Language::Vento | Language::Mustache
+                Language::Svelte
+                    | Language::Jinja
+                    | Language::Django
+                    | Language::Vento
+                    | Language::Mustache
             );
             let start = start + 1;
             let mut end = start;
@@ -863,7 +870,10 @@ impl<'s> Parser<'s> {
                     Some((i, '{'))
                         if matches!(
                             self.language,
-                            Language::Jinja | Language::Vento | Language::Mustache
+                            Language::Jinja
+                                | Language::Django
+                                | Language::Vento
+                                | Language::Mustache
                         ) =>
                     {
                         end = *i;
@@ -1260,7 +1270,12 @@ impl<'s> Parser<'s> {
         Ok(unsafe { self.source.get_unchecked(start..end) })
     }
 
-    fn parse_jinja_block_children<T, F>(&mut self, children_parser: &mut F) -> PResult<Vec<T>>
+    fn parse_jinja_block_children<T, F>(
+        &mut self,
+        tag_name: &str,
+        tag_start: usize,
+        children_parser: &mut F,
+    ) -> PResult<Vec<T>>
     where
         T: HasJinjaFlowControl<'s>,
         F: FnMut(&mut Self) -> PResult<T>,
@@ -1276,13 +1291,60 @@ impl<'s> Parser<'s> {
                     }
                     children.push(children_parser(self)?);
                 }
+                Some((_, c)) if c.is_ascii_whitespace() && T::skip_ws_before_jinja_block_end() => {
+                    self.chars.next();
+                }
                 Some(..) => {
                     children.push(children_parser(self)?);
                 }
-                None => return Err(self.emit_error(SyntaxErrorKind::ExpectJinjaBlockEnd)),
+                None => {
+                    let (line, column) = self.pos_to_line_col(tag_start);
+                    return Err(self.emit_error(SyntaxErrorKind::ExpectJinjaBlockEnd {
+                        tag_name: tag_name.into(),
+                        line,
+                        column,
+                    }));
+                }
             }
         }
         Ok(children)
+    }
+
+    fn parse_django_comment_content(&mut self) -> PResult<&'s str> {
+        let start = self
+            .chars
+            .peek()
+            .map(|(i, _)| *i)
+            .unwrap_or(self.source.len());
+
+        loop {
+            match self.chars.peek() {
+                Some((i, '{')) => {
+                    let i = *i;
+                    let mut chars = self.chars.clone();
+                    chars.next();
+                    if chars.next_if(|(_, c)| *c == '%').is_some() {
+                        let remaining = &self.source[i..];
+                        if remaining
+                            .trim_start_matches('{')
+                            .trim_start_matches('%')
+                            .trim_start_matches(['+', '-'])
+                            .trim_start()
+                            .starts_with("endcomment")
+                        {
+                            return Ok(unsafe { self.source.get_unchecked(start..i) });
+                        }
+                    }
+                    self.chars.next();
+                }
+                Some(..) => {
+                    self.chars.next();
+                }
+                None => {
+                    return Ok(unsafe { self.source.get_unchecked(start..self.source.len()) });
+                }
+            }
+        }
     }
 
     fn parse_jinja_comment(&mut self) -> PResult<JinjaComment<'s>> {
@@ -1357,7 +1419,24 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if matches!(
+        if matches!(self.language, Language::Django) && matches!(tag_name, "comment") {
+            let mut body = Vec::with_capacity(3);
+            body.push(JinjaTagOrChildren::Tag(first_tag));
+
+            let raw_content = self.parse_django_comment_content()?;
+            if !raw_content.is_empty() {
+                body.push(JinjaTagOrChildren::Children(vec![T::build(
+                    T::from_raw_text(raw_content),
+                    raw_content,
+                )]));
+            }
+
+            if let Ok(end_tag) = self.parse_jinja_tag() {
+                body.push(JinjaTagOrChildren::Tag(end_tag));
+            }
+
+            Ok(T::from_block(JinjaBlock { body }))
+        } else if (matches!(
             tag_name,
             "for"
                 | "if"
@@ -1369,14 +1448,38 @@ impl<'s> Parser<'s> {
                 | "autoescape"
                 | "embed"
                 | "with"
-                | "trans"
                 | "raw"
-        ) || tag_name == "set" && !first_tag.content.contains('=')
+        ) || tag_name == "set" && !first_tag.content.contains('='))
+            || (matches!(self.language, Language::Jinja) && tag_name == "trans")
+            || (matches!(self.language, Language::Django)
+                && matches!(
+                    tag_name,
+                    "autoescape"
+                        | "block"
+                        | "blocktrans"
+                        | "blocktranslate"
+                        | "cache"
+                        | "filter"
+                        | "for"
+                        | "if"
+                        | "ifchanged"
+                        | "language"
+                        | "localize"
+                        | "localtime"
+                        | "spaceless"
+                        | "tag"
+                        | "timezone"
+                        | "upper"
+                        | "with"
+                )
+                || self.custom_blocks.iter().any(|s| s == tag_name))
         {
+            let tag_start = first_tag.start;
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
 
             loop {
-                let mut children = self.parse_jinja_block_children(children_parser)?;
+                let mut children =
+                    self.parse_jinja_block_children(tag_name, tag_start, children_parser)?;
                 if !children.is_empty() {
                     if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
                         nodes.append(&mut children);
@@ -1393,8 +1496,11 @@ impl<'s> Parser<'s> {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
                         break;
                     }
-                    if (tag_name == "if" || tag_name == "for")
-                        && matches!(next_tag_name, "elif" | "elseif" | "else")
+                    if tag_name == "if" && matches!(next_tag_name, "elif" | "elseif" | "else")
+                        || tag_name == "for" && matches!(next_tag_name, "else" | "empty")
+                        || tag_name == "ifchanged" && next_tag_name == "else"
+                        || matches!(tag_name, "blocktrans" | "blocktranslate")
+                            && next_tag_name == "plural"
                     {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
                     } else if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
@@ -1570,6 +1676,7 @@ impl<'s> Parser<'s> {
                             Language::Html
                                 | Language::Astro
                                 | Language::Jinja
+                                | Language::Django
                                 | Language::Vento
                                 | Language::Mustache
                                 | Language::Xml
@@ -1597,57 +1704,55 @@ impl<'s> Parser<'s> {
                 let mut chars = self.chars.clone();
                 chars.next();
                 match chars.next() {
-                    Some((_, '{')) => {
-                        match self.language {
-                            Language::Html | Language::Xml => {
-                                self.parse_text_node().map(NodeKind::Text)
-                            }
-                            Language::Vue | Language::Jinja => self
-                                .parse_mustache_interpolation()
-                                .map(|(expr, start)| match self.language {
-                                    Language::Vue => {
-                                        NodeKind::VueInterpolation(VueInterpolation { expr, start })
-                                    }
-                                    Language::Jinja => {
-                                        let (trim_prev, expr) =
-                                            if let Some(rest) = expr.strip_prefix('-') {
-                                                (true, rest)
-                                            } else {
-                                                (false, expr)
-                                            };
-                                        let (trim_next, expr) =
-                                            if let Some(rest) = expr.strip_suffix('-') {
-                                                (true, rest)
-                                            } else {
-                                                (false, expr)
-                                            };
-                                        NodeKind::JinjaInterpolation(JinjaInterpolation {
-                                            expr,
-                                            start: if trim_prev { start + 1 } else { start },
-                                            trim_prev,
-                                            trim_next,
-                                        })
-                                    }
-                                    _ => unreachable!(),
-                                }),
-                            Language::Svelte => self
-                                .parse_svelte_interpolation()
-                                .map(NodeKind::SvelteInterpolation),
-                            Language::Astro => self.parse_astro_expr().map(NodeKind::AstroExpr),
-                            Language::Angular => self
-                                .try_parse(|parser| {
-                                    parser.parse_mustache_interpolation().map(|(expr, start)| {
-                                        NodeKind::AngularInterpolation(AngularInterpolation {
-                                            expr,
-                                            start,
-                                        })
+                    Some((_, '{')) => match self.language {
+                        Language::Html | Language::Xml => {
+                            self.parse_text_node().map(NodeKind::Text)
+                        }
+                        Language::Vue | Language::Jinja | Language::Django => self
+                            .parse_mustache_interpolation()
+                            .map(|(expr, start)| match self.language {
+                                Language::Vue => {
+                                    NodeKind::VueInterpolation(VueInterpolation { expr, start })
+                                }
+                                Language::Jinja | Language::Django => {
+                                    let (trim_prev, expr) =
+                                        if let Some(rest) = expr.strip_prefix('-') {
+                                            (true, rest)
+                                        } else {
+                                            (false, expr)
+                                        };
+                                    let (trim_next, expr) =
+                                        if let Some(rest) = expr.strip_suffix('-') {
+                                            (true, rest)
+                                        } else {
+                                            (false, expr)
+                                        };
+                                    NodeKind::JinjaInterpolation(JinjaInterpolation {
+                                        expr,
+                                        start: if trim_prev { start + 1 } else { start },
+                                        trim_prev,
+                                        trim_next,
+                                    })
+                                }
+                                _ => unreachable!(),
+                            }),
+                        Language::Svelte => self
+                            .parse_svelte_interpolation()
+                            .map(NodeKind::SvelteInterpolation),
+                        Language::Astro => self.parse_astro_expr().map(NodeKind::AstroExpr),
+                        Language::Angular => self
+                            .try_parse(|parser| {
+                                parser.parse_mustache_interpolation().map(|(expr, start)| {
+                                    NodeKind::AngularInterpolation(AngularInterpolation {
+                                        expr,
+                                        start,
                                     })
                                 })
-                                .or_else(|_| self.parse_text_node().map(NodeKind::Text)),
-                            Language::Vento => self.parse_vento_tag_or_block(None),
-                            Language::Mustache => self.parse_mustache_block_or_interpolation(),
-                        }
-                    }
+                            })
+                            .or_else(|_| self.parse_text_node().map(NodeKind::Text)),
+                        Language::Vento => self.parse_vento_tag_or_block(None),
+                        Language::Mustache => self.parse_mustache_block_or_interpolation(),
+                    },
                     Some((_, '#')) if matches!(self.language, Language::Svelte) => {
                         match chars.next() {
                             Some((_, 'i')) => {
@@ -1668,11 +1773,15 @@ impl<'s> Parser<'s> {
                             _ => self.parse_text_node().map(NodeKind::Text),
                         }
                     }
-                    Some((_, '#')) if matches!(self.language, Language::Jinja) => {
+                    Some((_, '#'))
+                        if matches!(self.language, Language::Jinja | Language::Django) =>
+                    {
                         self.parse_jinja_comment().map(NodeKind::JinjaComment)
                     }
                     Some((_, '@')) => self.parse_svelte_at_tag().map(NodeKind::SvelteAtTag),
-                    Some((_, '%')) if matches!(self.language, Language::Jinja) => {
+                    Some((_, '%'))
+                        if matches!(self.language, Language::Jinja | Language::Django) =>
+                    {
                         self.parse_jinja_tag_or_block(None, &mut Parser::parse_node)
                     }
                     _ => match self.language {
@@ -1687,7 +1796,11 @@ impl<'s> Parser<'s> {
             Some((_, '-'))
                 if matches!(
                     self.language,
-                    Language::Astro | Language::Jinja | Language::Vento | Language::Mustache
+                    Language::Astro
+                        | Language::Jinja
+                        | Language::Django
+                        | Language::Vento
+                        | Language::Mustache
                 ) && !self.state.has_front_matter =>
             {
                 let mut chars = self.chars.clone();
@@ -2368,7 +2481,9 @@ impl<'s> Parser<'s> {
                 self.chars.next();
                 (start, start + c.len_utf8())
             }
-            Some((i, '{')) if matches!(self.language, Language::Jinja) => (*i, *i + 1),
+            Some((i, '{')) if matches!(self.language, Language::Jinja | Language::Django) => {
+                (*i, *i + 1)
+            }
             Some((_, '>')) if matches!(self.language, Language::Astro) => {
                 // Astro allows fragment
                 return Ok("");
@@ -2380,7 +2495,7 @@ impl<'s> Parser<'s> {
             if is_html_tag_name_char(*c) {
                 end = *i + c.len_utf8();
                 self.chars.next();
-            } else if *c == '{' && matches!(self.language, Language::Jinja) {
+            } else if *c == '{' && matches!(self.language, Language::Jinja | Language::Django) {
                 let current_i = *i;
                 let mut chars = self.chars.clone();
                 chars.next();
@@ -2424,7 +2539,7 @@ impl<'s> Parser<'s> {
                         end = *i;
                         break;
                     }
-                    Language::Jinja => {
+                    Language::Jinja | Language::Django => {
                         let i = *i;
                         let mut chars = self.chars.clone();
                         chars.next();
@@ -2759,7 +2874,7 @@ fn is_html_tag_name_char(c: char) -> bool {
 fn is_special_tag_name_char(c: char, language: Language) -> bool {
     match language {
         Language::Astro => c == '>',
-        Language::Jinja => c == '{',
+        Language::Jinja | Language::Django => c == '{',
         _ => false,
     }
 }
@@ -2768,7 +2883,7 @@ fn is_attr_name_char(c: char) -> bool {
     !matches!(c, '"' | '\'' | '>' | '/' | '=') && !c.is_ascii_whitespace()
 }
 
-fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
+pub fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
     let trimmed = tag.content.trim_start_matches(['+', '-']).trim_start();
     trimmed
         .split_once(|c: char| c.is_ascii_whitespace())
@@ -2811,9 +2926,14 @@ type AngularIfCond<'s> = ((&'s str, usize), Option<(&'s str, usize)>);
 trait HasJinjaFlowControl<'s>: Sized {
     type Intermediate;
 
+    fn skip_ws_before_jinja_block_end() -> bool {
+        false
+    }
+
     fn build(intermediate: Self::Intermediate, raw: &'s str) -> Self;
     fn from_tag(tag: JinjaTag<'s>) -> Self::Intermediate;
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate;
+    fn from_raw_text(raw: &'s str) -> Self::Intermediate;
 }
 
 impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
@@ -2833,10 +2953,22 @@ impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate {
         NodeKind::JinjaBlock(block)
     }
+
+    fn from_raw_text(raw: &'s str) -> Self::Intermediate {
+        NodeKind::Text(TextNode {
+            raw,
+            line_breaks: raw.chars().filter(|c| *c == '\n').count(),
+            start: 0,
+        })
+    }
 }
 
 impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
     type Intermediate = Attribute<'s>;
+
+    fn skip_ws_before_jinja_block_end() -> bool {
+        true
+    }
 
     fn build(intermediate: Self::Intermediate, _: &'s str) -> Self {
         intermediate
@@ -2848,6 +2980,10 @@ impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
 
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate {
         Attribute::JinjaBlock(block)
+    }
+
+    fn from_raw_text(_raw: &'s str) -> Self::Intermediate {
+        unreachable!("raw text blocks should not appear in attributes")
     }
 }
 
@@ -2875,7 +3011,7 @@ pub fn parse_as_interpolated(
                         pos = i;
                         brace_stack += 1;
                     }
-                    Language::Jinja | Language::Vento | Language::Mustache => {
+                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
                         if chars.next_if(|(_, c)| *c == '{').is_some() {
                             statics.push(unsafe { text.get_unchecked(pos..i) });
                             pos = i;
@@ -2899,7 +3035,7 @@ pub fn parse_as_interpolated(
                         pos = i + 1;
                         brace_stack = 0;
                     }
-                    Language::Jinja | Language::Vento | Language::Mustache => {
+                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
                         if chars.next_if(|(_, c)| *c == '}').is_some() {
                             dynamics.push((
                                 unsafe { text.get_unchecked(pos + 2..i) },

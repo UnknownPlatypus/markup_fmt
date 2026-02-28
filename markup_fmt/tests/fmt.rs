@@ -1,13 +1,17 @@
 use insta::{Settings, assert_snapshot, glob};
 use markup_fmt::{Language, config::FormatOptions, detect_language, format_text};
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, convert::Infallible, fs, path::Path};
 
 #[test]
 fn fmt_snapshot() {
     let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,hbs,xml}";
     glob!(pattern, |path| {
         let input = fs::read_to_string(path).unwrap();
-        let language = detect_language(path).unwrap();
+        let language = if path.to_str().unwrap().contains("django") {
+            Language::Django
+        } else {
+            detect_language(path).unwrap()
+        };
 
         let options = fs::read_to_string(path.with_file_name("config.toml"))
             .map(|config_file| {
@@ -39,17 +43,18 @@ fn run_format_test(
     options: &FormatOptions,
     language: Language,
 ) -> String {
-    let output = format_text(input, language, options, |code, _| Ok::<_, ()>(code.into()))
-        .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
-        .unwrap();
+    let output = format_text(input, language, options, |code, _| {
+        Ok::<_, Infallible>(code.into())
+    })
+    .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
+    .unwrap();
     let regression_format = format_text(&output, language, options, |code, _| {
-        Ok::<_, ()>(code.into())
+        Ok::<_, Infallible>(code.into())
     })
     .map_err(|err| {
         format!(
-            "syntax error in stability test '{}': {:?}",
+            "syntax error in stability test '{}': {err:?}",
             path.display(),
-            err
         )
     })
     .unwrap();

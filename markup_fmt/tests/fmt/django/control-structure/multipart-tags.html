@@ -1,0 +1,36 @@
+{% blocktranslate trimmed count counter=provider.reviews_count %}
+{{ counter }} avis client
+{% plural %}
+{{ counter }} avis clients
+{% endblocktranslate %}
+
+{% if user.is_authenticated %}
+Welcome back!
+{% elif user.is_staff %}
+Admin access
+{% elseif user.is_superuser %}
+Super admin access
+{% else %}
+Please login
+{% endif %}
+
+{% for item in items %}
+{{ item.name }}
+{% empty %}
+No items found
+{% else %}
+End of items
+{% endfor %}
+
+{% ifchanged %}
+Content changed
+{% else %}
+Content unchanged
+{% endifchanged %}
+
+{% blocktrans %}
+Simple translation
+{% plural %}
+Multiple translations
+{% endblocktrans %}
+

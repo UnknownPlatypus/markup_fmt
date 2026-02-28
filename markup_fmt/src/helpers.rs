@@ -1,4 +1,5 @@
 use crate::Language;
+use crate::state::State;
 use aho_corasick::AhoCorasick;
 use std::{borrow::Cow, sync::LazyLock};
 
@@ -87,7 +88,11 @@ static NON_WS_SENSITIVE_TAGS: [&str; 76] = [
 
 pub(crate) fn is_whitespace_sensitive_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Vento | Language::Mustache => {
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => {
             // There's also a tag called "a" in SVG, so we need to check it specially.
             name.eq_ignore_ascii_case("a")
                 || !NON_WS_SENSITIVE_TAGS
@@ -113,7 +118,11 @@ static VOID_ELEMENTS: [&str; 14] = [
 
 pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Vento | Language::Mustache => VOID_ELEMENTS
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => VOID_ELEMENTS
             .iter()
             .any(|tag| tag.eq_ignore_ascii_case(name)),
         Language::Xml => false,
@@ -123,10 +132,17 @@ pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
 
 pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Vento | Language::Mustache => {
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => {
             css_dataset::tags::STANDARD_HTML_TAGS
                 .iter()
                 .any(|tag| tag.eq_ignore_ascii_case(name))
+                || css_dataset::tags::NON_STANDARD_HTML_TAGS
+                    .iter()
+                    .any(|tag| tag.eq_ignore_ascii_case(name))
                 || css_dataset::tags::NON_STANDARD_HTML_TAGS
                     .iter()
                     .any(|tag| tag.eq_ignore_ascii_case(name))
@@ -142,7 +158,7 @@ pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
 pub(crate) fn is_svg_tag(name: &str, language: Language) -> bool {
     if matches!(
         language,
-        Language::Html | Language::Jinja | Language::Vento | Language::Mustache
+        Language::Html | Language::Jinja | Language::Django | Language::Vento | Language::Mustache
     ) {
         css_dataset::tags::SVG_TAGS
             .iter()
@@ -154,11 +170,13 @@ pub(crate) fn is_svg_tag(name: &str, language: Language) -> bool {
 
 pub(crate) fn is_mathml_tag(name: &str, language: Language) -> bool {
     match language {
-        Language::Html | Language::Jinja | Language::Vento | Language::Mustache => {
-            css_dataset::tags::MATH_ML_TAGS
-                .iter()
-                .any(|tag| tag.eq_ignore_ascii_case(name))
-        }
+        Language::Html
+        | Language::Jinja
+        | Language::Django
+        | Language::Vento
+        | Language::Mustache => css_dataset::tags::MATH_ML_TAGS
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(name)),
         Language::Xml => false,
         _ => css_dataset::tags::MATH_ML_TAGS.contains(&name),
     }
@@ -229,12 +247,53 @@ pub(crate) fn kebab2pascal(s: &'_ str) -> Cow<'_, str> {
     }
 }
 
+/// Checks if the given attribute name content should be space-separated.
+///
+/// These were found using the HTML attribute list, cross-referencing the HTML spec:
+/// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes>
+/// - <https://html.spec.whatwg.org/multipage/>
+pub(crate) fn should_be_space_separated(name: &str, state: &State) -> bool {
+    name.eq_ignore_ascii_case("class")
+        || name.eq_ignore_ascii_case("aria-labelledby")
+        || name.eq_ignore_ascii_case("aria-describedby")
+        || name.eq_ignore_ascii_case("aria-controls")
+        || name.eq_ignore_ascii_case("aria-owns")
+        || name.eq_ignore_ascii_case("rel")
+            && state
+                .current_tag_name
+                .map(|name| {
+                    ["form", "a", "area", "link"]
+                        .iter()
+                        .any(|tag| tag.eq_ignore_ascii_case(name))
+                })
+                .unwrap_or_default()
+        || name.eq_ignore_ascii_case("autocomplete")
+            && state
+                .current_tag_name
+                .map(|name| {
+                    ["form", "input", "select", "textarea"]
+                        .iter()
+                        .any(|tag| tag.eq_ignore_ascii_case(name))
+                })
+                .unwrap_or_default()
+        || name.eq_ignore_ascii_case("sandbox")
+            && state
+                .current_tag_name
+                .map(|name| name.eq_ignore_ascii_case("iframe"))
+                .unwrap_or_default()
+        || name.eq_ignore_ascii_case("accept-charset")
+            && state
+                .current_tag_name
+                .map(|name| name.eq_ignore_ascii_case("form"))
+                .unwrap_or_default()
+}
+
 pub(crate) fn has_template_interpolation(s: &str, language: Language) -> bool {
     match language {
         Language::Html | Language::Xml => false,
         Language::Svelte | Language::Astro => s.contains('{'),
         Language::Vue | Language::Angular => s.contains("{{"),
-        Language::Jinja | Language::Vento | Language::Mustache => {
+        Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
             s.contains("{{") || s.contains("{%")
         }
     }

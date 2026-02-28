@@ -30,6 +30,7 @@ where
         match self.language {
             Language::Html
             | Language::Jinja
+            | Language::Django
             | Language::Vento
             | Language::Angular
             | Language::Mustache => self
@@ -56,6 +57,7 @@ where
         match self.language {
             Language::Html
             | Language::Jinja
+            | Language::Django
             | Language::Vento
             | Language::Angular
             | Language::Mustache => self

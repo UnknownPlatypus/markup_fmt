@@ -47,43 +47,12 @@ source: markup_fmt/tests/fmt.rs
   Sold-out!
 {% endif %}
 
-{% macro input(name, value='', type='text', size=20) -%}
-  <input
-    type="{{ type }}"
-    name="{{ name }}"
-    value="{{
-        value|e }}"
-    size="{{ size }}"
-  >
-{%- endmacro %}
-
 <title>{% block title %}{% endblock %}</title>
 
-{% set reply | wordwrap %}
-  You wrote:
-  {{ message }}
-{% endset %}
+{% if kenny.sick %}{% include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg" %}{% endif %}
 
-{% trans %}Hello, {{ user }}!{% endtrans %}
-{% trans user=user.username %}Hello, {{ user }}!{% endtrans %}
-
-{% trans book_title=book.title, author=author.name %}
-  This is {{ book_title }} by {{ author }}
-{% endtrans %}
-
-{% trans count=list|length %}
-  There is {{ count }} {{ name }} object.
-  {% pluralize %}
-  There are {{ count }} {{ name }} objects.
-{% endtrans %}
-
-{% raw %}
-  <ul>
-    {% for item in seq %}
-      <li>{{ item }}</li>
-    {% endfor %}
-  </ul>
-{% endraw %}
-{% if kenny.sick %}{%
-    include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg"
-  %}{% endif %}
+{% for file in profile.files.all %}
+  <li><a href="{{ file.url }}">{{ file }}</a></li>
+{% empty %}
+  <li><em>None</em></li>
+{% endfor %}
