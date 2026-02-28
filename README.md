@@ -14,6 +14,7 @@ markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nun
 - Don't format django multiline comment tags (`{% comment %}...{% endcomment %}`) in [16417e7](https://github.com/UnknownPlatypus/markup_fmt/commit/16417e72d18ec2a3da6ebf1ed5ce7100704d3d5f)
 - Fix indent of `{% for %}`/`{% empty %}` blocks
 - Fix formatting of some intermediate tags like `{% plural %}` inside `{% blocktranslate %}`
+- Improve formatting of django blocks following whitespace sensitivity
 
 ## Notes for Vue and Svelte Users
 
