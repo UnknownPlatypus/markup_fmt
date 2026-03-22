@@ -1,5 +1,6 @@
 ---
 source: markup_fmt/tests/fmt.rs
+assertion_line: 30
 ---
 <div class="contact-info-column">
   {% if contact.email %}<a href="mailto:{{ contact.email }}">{{
@@ -173,3 +174,6 @@ source: markup_fmt/tests/fmt.rs
 {% if form.realm_subdomain.value() %}{{ form.realm_subdomain.value() }}.{%
   endif
 %}{{ external_host }}
+{% if form.realm_subdomain.value() %}
+  {{ form.realm_subdomain.value() }}.
+{% endif %}{{ external_host }}

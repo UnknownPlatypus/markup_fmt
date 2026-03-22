@@ -9,5 +9,6 @@ source: markup_fmt/tests/fmt.rs
 
 {{<parent}}
   {{$block}}
-    one two{{/block}}
+    one two
+  {{/block}}
 {{/parent}}
