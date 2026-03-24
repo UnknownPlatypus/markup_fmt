@@ -1,4 +1,3 @@
-use crate::helpers::should_be_space_separated;
 use crate::{
     Language,
     ast::*,
@@ -371,6 +370,7 @@ impl<'s> DocGen<'s> for Attribute<'s> {
             Attribute::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
             Attribute::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             Attribute::VentoTagOrBlock(vento_tag_or_block) => vento_tag_or_block.doc(ctx, state),
+            Attribute::JsComment(js_comment) => js_comment.doc(ctx, state),
         }
     }
 }
@@ -717,8 +717,15 @@ impl<'s> DocGen<'s> for Element<'s> {
                             } else {
                                 lang
                             };
-                            let formatted =
-                                ctx.format_script(text_node.raw, lang, text_node.start, &state);
+                            let formatted = if matches!(
+                                ctx.language,
+                                Language::Jinja | Language::Mustache | Language::Vento
+                            ) {
+                                ctx.try_format_script(text_node.raw, lang, text_node.start, &state)
+                                    .unwrap_or_else(|_| Cow::from(text_node.raw))
+                            } else {
+                                ctx.format_script(text_node.raw, lang, text_node.start, &state)
+                            };
                             let doc = if matches!(
                                 ctx.options.script_formatter,
                                 Some(ScriptFormatter::Dprint)
@@ -1058,6 +1065,21 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
     }
 }
 
+impl<'s> DocGen<'s> for JsComment<'s> {
+    fn doc<E, F>(&self, _: &mut Ctx<'s, E, F>, _: &State<'s>) -> Doc<'s>
+    where
+        F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    {
+        if self.block {
+            Doc::text("/*")
+                .concat(reflow_raw(self.raw))
+                .append(Doc::text("*/"))
+        } else {
+            Doc::text(format!("//{}", self.raw.trim_ascii_end()))
+        }
+    }
+}
+
 impl<'s> DocGen<'s> for MustacheBlock<'s> {
     fn doc<E, F>(&self, ctx: &mut Ctx<'s, E, F>, state: &State<'s>) -> Doc<'s>
     where
@@ -1201,7 +1223,7 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             let mut docs = Vec::with_capacity(5);
             docs.push(name);
             docs.push(Doc::text("="));
-            if should_be_space_separated(self.name, state) {
+            if helpers::should_be_space_separated(self.name, state.current_tag_name) {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
                 let value = value.trim();
                 let maybe_line_break = if value.contains('\n') {
@@ -2282,6 +2304,7 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
         | Attribute::JinjaTag(JinjaTag { content: value, .. }) => value.contains('\n'),
         // Templating blocks usually span across multiple lines so let's just assume true.
         Attribute::JinjaBlock(..) | Attribute::VentoTagOrBlock(..) => true,
+        Attribute::JsComment(comment) => comment.raw.contains('\n'),
     }
 }
 
