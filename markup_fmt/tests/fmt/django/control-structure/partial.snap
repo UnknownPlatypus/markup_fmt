@@ -1,0 +1,31 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{% partialdef user-info %}
+  <div class="user">
+    <span>{{ user.name }}</span>
+    <span>{{ user.email }}</span>
+  </div>
+{% endpartialdef %}
+
+{% partialdef sidebar inline %}
+  <aside>
+    <h2>{% trans "Menu" %}</h2>
+    <ul>
+      {% for item in items %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </aside>
+{% endpartialdef %}
+
+<main>
+  <section>{% partial user-info %}</section>
+  <section>
+    {% partial sidebar %}
+  </section>
+
+  {% if user.is_authenticated %}
+    {% partial user-info %}
+  {% endif %}
+</main>

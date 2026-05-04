@@ -1475,6 +1475,7 @@ impl<'s> Parser<'s> {
                         | "language"
                         | "localize"
                         | "localtime"
+                        | "partialdef"
                         | "spaceless"
                         | "tag"
                         | "timezone"
