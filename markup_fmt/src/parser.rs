@@ -958,7 +958,7 @@ impl<'s> Parser<'s> {
         };
         let start = start + 1;
 
-        let mut end = start;
+        let end;
         loop {
             match self.chars.next() {
                 Some((i, '-')) => {
@@ -974,7 +974,10 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some(..) => continue,
-                None => break,
+                None => {
+                    end = self.source.len();
+                    break;
+                }
             }
         }
 
@@ -1026,17 +1029,23 @@ impl<'s> Parser<'s> {
             match self.chars.peek() {
                 Some((_, '/')) => {
                     self.chars.next();
-                    if self.chars.next_if(|(_, c)| *c == '>').is_some() {
-                        return Ok(Element {
-                            tag_name,
-                            attrs,
-                            first_attr_same_line,
-                            children: vec![],
-                            self_closing: true,
-                            void_element,
-                        });
+                    match self.chars.peek() {
+                        Some((_, '>')) => {
+                            self.chars.next();
+                            return Ok(Element {
+                                tag_name,
+                                attrs,
+                                first_attr_same_line,
+                                children: vec![],
+                                self_closing: true,
+                                void_element,
+                            });
+                        }
+                        Some((_, '/' | '*')) if self.language == Language::Svelte => {
+                            attrs.push(Attribute::JsComment(self.parse_js_comment()?));
+                        }
+                        _ => return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag)),
                     }
-                    return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag));
                 }
                 Some((_, '>')) => {
                     self.chars.next();
@@ -1528,6 +1537,45 @@ impl<'s> Parser<'s> {
         }
     }
 
+    // former `/` has been consumed
+    fn parse_js_comment(&mut self) -> PResult<JsComment<'s>> {
+        let Some((start, first_char)) = self.chars.next_if(|(_, c)| matches!(c, '/' | '*')) else {
+            return Err(self.emit_error(SyntaxErrorKind::ExpectChar('/')));
+        };
+        let start = start + 1;
+        if first_char == '/' {
+            let mut end = start;
+            loop {
+                match self.chars.next() {
+                    Some((_, '\n')) | None => break,
+                    Some((i, _)) => end = i,
+                }
+            }
+            Ok(JsComment {
+                block: false,
+                raw: unsafe { self.source.get_unchecked(start..=end) },
+            })
+        } else {
+            let mut end = start;
+            loop {
+                match self.chars.next() {
+                    Some((i, '*')) => {
+                        end = i;
+                        if self.chars.next_if(|(_, c)| *c == '/').is_some() {
+                            break;
+                        }
+                    }
+                    Some((i, _)) => end = i,
+                    None => break,
+                }
+            }
+            Ok(JsComment {
+                block: true,
+                raw: unsafe { self.source.get_unchecked(start..end) },
+            })
+        }
+    }
+
     fn parse_mustache_block_or_interpolation(&mut self) -> PResult<NodeKind<'s>> {
         let mut controls = vec![];
         let (raw, _) = self.parse_mustache_interpolation()?;
@@ -1796,9 +1844,10 @@ impl<'s> Parser<'s> {
             Some((_, '-'))
                 if matches!(
                     self.language,
-                    Language::Astro
-                        | Language::Jinja
+                    Language::Html
+                        | Language::Astro
                         | Language::Django
+                        | Language::Jinja
                         | Language::Vento
                         | Language::Mustache
                 ) && !self.state.has_front_matter =>
@@ -2926,13 +2975,11 @@ type AngularIfCond<'s> = ((&'s str, usize), Option<(&'s str, usize)>);
 trait HasJinjaFlowControl<'s>: Sized {
     type Intermediate;
 
-    fn skip_ws_before_jinja_block_end() -> bool {
-        false
-    }
-
     fn build(intermediate: Self::Intermediate, raw: &'s str) -> Self;
     fn from_tag(tag: JinjaTag<'s>) -> Self::Intermediate;
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate;
+
+    fn skip_ws_before_jinja_block_end() -> bool;
     fn from_raw_text(raw: &'s str) -> Self::Intermediate;
 }
 
@@ -2954,6 +3001,10 @@ impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
         NodeKind::JinjaBlock(block)
     }
 
+    fn skip_ws_before_jinja_block_end() -> bool {
+        false
+    }
+
     fn from_raw_text(raw: &'s str) -> Self::Intermediate {
         NodeKind::Text(TextNode {
             raw,
@@ -2966,10 +3017,6 @@ impl<'s> HasJinjaFlowControl<'s> for Node<'s> {
 impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
     type Intermediate = Attribute<'s>;
 
-    fn skip_ws_before_jinja_block_end() -> bool {
-        true
-    }
-
     fn build(intermediate: Self::Intermediate, _: &'s str) -> Self {
         intermediate
     }
@@ -2980,6 +3027,10 @@ impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
 
     fn from_block(block: JinjaBlock<'s, Self>) -> Self::Intermediate {
         Attribute::JinjaBlock(block)
+    }
+
+    fn skip_ws_before_jinja_block_end() -> bool {
+        true
     }
 
     fn from_raw_text(_raw: &'s str) -> Self::Intermediate {
