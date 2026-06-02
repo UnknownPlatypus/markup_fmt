@@ -3,6 +3,7 @@
 pub mod ast;
 pub mod config;
 mod ctx;
+pub mod debug;
 mod error;
 mod helpers;
 pub mod parser;
@@ -10,7 +11,7 @@ mod printer;
 mod state;
 
 use crate::{config::FormatOptions, ctx::Ctx, parser::Parser, printer::DocGen, state::State};
-pub use crate::{ctx::Hints, error::*, parser::Language};
+pub use crate::{ctx::Hints, debug::debug_doc_tree, error::*, parser::Language};
 use std::{borrow::Cow, path::Path};
 use tiny_pretty::{IndentKind, PrintOptions};
 
