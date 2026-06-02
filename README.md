@@ -15,6 +15,7 @@ markup_fmt is a configurable HTML, Vue, Svelte, Astro, Angular, Jinja, Twig, Nun
 - Fix indent of `{% for %}`/`{% empty %}` blocks
 - Fix formatting of some intermediate tags like `{% plural %}` inside `{% blocktranslate %}`
 - Add a `preserveUnquotedAttrs` option to support django-cotton
+- Support disabling formatting via Jinja/Django comments (`{# markup-fmt-ignore #}` and `{# markup-fmt-ignore-file #}`) in addition to HTML comments
 
 ## Notes for Vue and Svelte Users
 

@@ -2339,19 +2339,20 @@ where
 {
     match index.checked_sub(1).and_then(|i| nodes.get(i)) {
         Some(Node {
-            kind: NodeKind::Comment(comment),
+            kind: NodeKind::Comment(Comment { raw }) | NodeKind::JinjaComment(JinjaComment { raw }),
             ..
-        }) => has_ignore_directive(comment, ctx),
+        }) => has_ignore_directive(raw, ctx),
         Some(Node {
             kind: NodeKind::Text(text_node),
             ..
         }) if is_all_ascii_whitespace(text_node.raw) => {
             if let Some(Node {
-                kind: NodeKind::Comment(comment),
+                kind:
+                    NodeKind::Comment(Comment { raw }) | NodeKind::JinjaComment(JinjaComment { raw }),
                 ..
             }) = index.checked_sub(2).and_then(|i| nodes.get(i))
             {
-                has_ignore_directive(comment, ctx)
+                has_ignore_directive(raw, ctx)
             } else {
                 false
             }
@@ -2359,13 +2360,11 @@ where
         _ => false,
     }
 }
-fn has_ignore_directive<'s, F>(comment: &Comment, ctx: &Ctx<'s, F>) -> bool
+fn has_ignore_directive<'s, F>(raw: &str, ctx: &Ctx<'s, F>) -> bool
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
-    comment
-        .raw
-        .trim_start()
+    raw.trim_start()
         .strip_prefix(&ctx.options.ignore_comment_directive)
         .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_whitespace()) || rest.is_empty())
 }
