@@ -66,7 +66,9 @@ where
 
     if ast.children.first().is_some_and(|child| {
         if let ast::Node {
-            kind: ast::NodeKind::Comment(ast::Comment { raw, .. }),
+            kind:
+                ast::NodeKind::Comment(ast::Comment { raw, .. })
+                | ast::NodeKind::JinjaComment(ast::JinjaComment { raw, .. }),
             ..
         } = child
         {
