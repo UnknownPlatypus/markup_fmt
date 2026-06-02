@@ -5,22 +5,24 @@ use crate::{
     config::FormatOptions, ctx::Ctx, ctx::Hints, error::FormatError, parser::Language,
     parser::Parser, printer::DocGen, state::State,
 };
+use anyhow::Error;
 use std::borrow::Cow;
-use tiny_pretty::Doc;
 
 /// Build the intermediate [`tiny_pretty::Doc`] tree for the given source and
-/// render it as a human-readable, indented tree.
+/// render it as a pretty-printed, indented tree.
 ///
 /// This is the same `Doc` IR that [`crate::format_text`] feeds to the pretty
-/// printer, exposed for debugging and visualization.
-pub fn debug_doc_tree<E, F>(
+/// printer, exposed for debugging and visualization. The tree is rendered with
+/// `Doc`'s `Debug` representation because `tiny_pretty` does not expose its
+/// `Nest` wrapper type, so a hand-rolled walker cannot descend into nested docs.
+pub fn debug_doc_tree<F>(
     code: &str,
     language: Language,
     options: &FormatOptions,
     external_formatter: F,
-) -> Result<String, FormatError<E>>
+) -> Result<String, FormatError>
 where
-    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, E>,
+    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
     let mut parser = Parser::new(
         code,
@@ -52,57 +54,5 @@ where
         return Err(FormatError::External(ctx.external_formatter_errors));
     }
 
-    let mut out = String::new();
-    write_doc(&mut out, &doc, 0);
-    Ok(out)
-}
-
-/// Recursively render a [`tiny_pretty::Doc`] node as an indented tree line.
-fn write_doc(out: &mut String, doc: &Doc, indent: usize) {
-    use std::fmt::Write;
-
-    let prefix = "│  ".repeat(indent);
-    match doc {
-        Doc::Nil => {
-            let _ = writeln!(out, "{prefix}Nil");
-        }
-        Doc::NewLine => {
-            let _ = writeln!(out, "{prefix}NewLine");
-        }
-        Doc::EmptyLine => {
-            let _ = writeln!(out, "{prefix}EmptyLine");
-        }
-        Doc::Text(text) => {
-            let _ = writeln!(out, "{prefix}Text({text:?})");
-        }
-        Doc::Break(size, offset) => {
-            let _ = writeln!(out, "{prefix}Break(size={size}, offset={offset})");
-        }
-        Doc::Nest(width, inner) => {
-            let _ = writeln!(out, "{prefix}Nest({width})");
-            write_doc(out, inner, indent + 1);
-        }
-        Doc::Alt(flat, broken) => {
-            let _ = writeln!(out, "{prefix}Alt");
-            write_doc(out, flat, indent + 1);
-            write_doc(out, broken, indent + 1);
-        }
-        Doc::Union(first, second) => {
-            let _ = writeln!(out, "{prefix}Union");
-            write_doc(out, first, indent + 1);
-            write_doc(out, second, indent + 1);
-        }
-        Doc::Group(docs) => {
-            let _ = writeln!(out, "{prefix}Group");
-            for child in docs {
-                write_doc(out, child, indent + 1);
-            }
-        }
-        Doc::List(docs) => {
-            let _ = writeln!(out, "{prefix}List");
-            for child in docs {
-                write_doc(out, child, indent + 1);
-            }
-        }
-    }
+    Ok(format!("{doc:#?}"))
 }
