@@ -1,6 +1,6 @@
 use crate::Language;
 use aho_corasick::AhoCorasick;
-use std::{borrow::Cow, sync::LazyLock};
+use std::{borrow::Cow, cmp::Ordering, ops::ControlFlow, sync::LazyLock};
 
 pub(crate) fn is_component(name: &str) -> bool {
     name.contains('-') || name.contains(|c: char| c.is_ascii_uppercase())
@@ -319,5 +319,34 @@ pub(crate) fn should_be_space_separated(attr_name: &str, tag_name: Option<&str>)
         })
     } else {
         false
+    }
+}
+
+pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
+    let search = memchr::memchr_iter(b'\n', source.as_bytes()).try_fold(
+        (1, 0),
+        |(line, prev_offset), offset| match pos.cmp(&offset) {
+            Ordering::Less => ControlFlow::Break((line, prev_offset)),
+            Ordering::Equal => ControlFlow::Break((line, prev_offset)),
+            Ordering::Greater => ControlFlow::Continue((line + 1, offset)),
+        },
+    );
+    match search {
+        ControlFlow::Break((line, offset)) => (line, pos - offset + 1),
+        ControlFlow::Continue((line, _)) => (line, 0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pos_to_line_col() {
+        let source = "abc\ndef\nghi";
+        // Positions whose line is followed by a later newline go through the
+        // `Break` arm, which must report a non-zero column.
+        assert_eq!(super::pos_to_line_col(source, 0), (1, 1));
+        assert_eq!(super::pos_to_line_col(source, 2), (1, 3));
+        assert_eq!(super::pos_to_line_col(source, 4), (2, 2));
+        assert_eq!(super::pos_to_line_col(source, 6), (2, 4));
     }
 }

@@ -12,7 +12,7 @@ use crate::{
     error::{SyntaxError, SyntaxErrorKind},
     helpers,
 };
-use std::{cmp::Ordering, iter::Peekable, ops::ControlFlow, str::CharIndices};
+use std::{iter::Peekable, str::CharIndices};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Supported languages.
@@ -79,26 +79,12 @@ impl<'s> Parser<'s> {
     }
 
     fn emit_error_with_pos(&self, kind: SyntaxErrorKind, pos: usize) -> SyntaxError {
-        let (line, column) = self.pos_to_line_col(pos);
+        let (line, column) = helpers::pos_to_line_col(self.source, pos);
         SyntaxError {
             kind,
             pos,
             line,
             column,
-        }
-    }
-    fn pos_to_line_col(&self, pos: usize) -> (usize, usize) {
-        let search = memchr::memchr_iter(b'\n', self.source.as_bytes()).try_fold(
-            (1, 0),
-            |(line, prev_offset), offset| match pos.cmp(&offset) {
-                Ordering::Less => ControlFlow::Break((line, prev_offset)),
-                Ordering::Equal => ControlFlow::Break((line, prev_offset)),
-                Ordering::Greater => ControlFlow::Continue((line + 1, offset)),
-            },
-        );
-        match search {
-            ControlFlow::Break((line, offset)) => (line, pos - offset + 1),
-            ControlFlow::Continue((line, _)) => (line, 0),
         }
     }
 
@@ -880,18 +866,14 @@ impl<'s> Parser<'s> {
                         let mut chars = self.chars.clone();
                         chars.next();
                         match chars.peek() {
-                            Some((_, '%')) => {
+                            Some((_, '%'))
                                 if self
                                     .parse_jinja_tag_or_block(None, &mut Parser::parse_node)
-                                    .is_ok()
-                                {
-                                    end =
-                                        self.chars.peek().map(|(i, _)| i - 1).ok_or_else(|| {
-                                            self.emit_error(SyntaxErrorKind::ExpectAttrValue)
-                                        })?;
-                                } else {
-                                    self.chars.next();
-                                }
+                                    .is_ok() =>
+                            {
+                                end = self.chars.peek().map(|(i, _)| i - 1).ok_or_else(|| {
+                                    self.emit_error(SyntaxErrorKind::ExpectAttrValue)
+                                })?;
                             }
                             Some((_, '{')) => {
                                 chars.next();
@@ -1102,7 +1084,8 @@ impl<'s> Parser<'s> {
                         self.chars = chars;
                         let close_tag_name = self.parse_tag_name()?;
                         if !close_tag_name.eq_ignore_ascii_case(tag_name) {
-                            let (line, column) = self.pos_to_line_col(element_start);
+                            let (line, column) =
+                                helpers::pos_to_line_col(self.source, element_start);
                             return Err(self.emit_error_with_pos(
                                 SyntaxErrorKind::ExpectCloseTag {
                                     tag_name: tag_name.into(),
@@ -1116,7 +1099,7 @@ impl<'s> Parser<'s> {
                         if self.chars.next_if(|(_, c)| *c == '>').is_some() {
                             break;
                         }
-                        let (line, column) = self.pos_to_line_col(element_start);
+                        let (line, column) = helpers::pos_to_line_col(self.source, element_start);
                         return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
                             tag_name: tag_name.into(),
                             line,
@@ -1140,7 +1123,7 @@ impl<'s> Parser<'s> {
                     }
                 }
                 None => {
-                    let (line, column) = self.pos_to_line_col(element_start);
+                    let (line, column) = helpers::pos_to_line_col(self.source, element_start);
                     return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
                         tag_name: tag_name.into(),
                         line,
@@ -1202,7 +1185,7 @@ impl<'s> Parser<'s> {
                     pair_stack.pop();
                 }
                 Some((_, '/'))
-                    if !matches!(pair_stack.last(), Some('\'' | '"' | '`' | '/' | '*')) =>
+                    if !matches!(pair_stack.last(), Some('\'' | '"' | '`' | '/' | '*' | '$')) =>
                 {
                     if let Some((_, c)) = self.chars.next_if(|(_, c)| *c == '/' || *c == '*') {
                         pair_stack.push(c);
@@ -1307,7 +1290,7 @@ impl<'s> Parser<'s> {
                     children.push(children_parser(self)?);
                 }
                 None => {
-                    let (line, column) = self.pos_to_line_col(tag_start);
+                    let (line, column) = helpers::pos_to_line_col(self.source, tag_start);
                     return Err(self.emit_error(SyntaxErrorKind::ExpectJinjaBlockEnd {
                         tag_name: tag_name.into(),
                         line,
@@ -2017,28 +2000,26 @@ impl<'s> Parser<'s> {
                         self.skip_ws();
                         let mut chars = self.chars.clone();
                         match chars.next() {
-                            Some((_, 't')) => {
+                            Some((_, 't'))
                                 if chars
                                     .next_if(|(_, c)| *c == 'h')
                                     .and_then(|_| chars.next_if(|(_, c)| *c == 'e'))
                                     .and_then(|_| chars.next_if(|(_, c)| *c == 'n'))
-                                    .is_some()
-                                {
-                                    end = i;
-                                    break;
-                                }
+                                    .is_some() =>
+                            {
+                                end = i;
+                                break;
                             }
-                            Some((_, 'c')) => {
+                            Some((_, 'c'))
                                 if chars
                                     .next_if(|(_, c)| *c == 'a')
                                     .and_then(|_| chars.next_if(|(_, c)| *c == 't'))
                                     .and_then(|_| chars.next_if(|(_, c)| *c == 'c'))
                                     .and_then(|_| chars.next_if(|(_, c)| *c == 'h'))
-                                    .is_some()
-                                {
-                                    end = i;
-                                    break;
-                                }
+                                    .is_some() =>
+                            {
+                                end = i;
+                                break;
                             }
                             _ => {}
                         }
@@ -2732,8 +2713,10 @@ impl<'s> Parser<'s> {
 
         let is_function = tag_name == "function"
             || matches!(tag_name, "async" | "export") && tag_rest.starts_with("function");
-        if matches!(tag_name, "for" | "if" | "layout")
-            || matches!(tag_name, "set" | "export") && !first_tag.contains('=')
+        if matches!(
+            tag_name,
+            "for" | "if" | "layout" | "slot" | "default" | "comp"
+        ) || matches!(tag_name, "set" | "export") && !first_tag.contains('=')
             || is_function
         {
             let mut body = vec![VentoTagOrChildren::Tag(VentoTag {
@@ -2936,7 +2919,7 @@ fn is_attr_name_char(c: char) -> bool {
 pub fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
     let trimmed = tag.content.trim_start_matches(['+', '-']).trim_start();
     trimmed
-        .split_once(|c: char| c.is_ascii_whitespace())
+        .split_once(|c: char| !c.is_ascii_alphanumeric() && c != '_')
         .map(|(name, _)| name)
         .unwrap_or(trimmed)
 }
@@ -3063,12 +3046,12 @@ pub fn parse_as_interpolated(
                         pos = i;
                         brace_stack += 1;
                     }
-                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
-                        if chars.next_if(|(_, c)| *c == '{').is_some() {
-                            statics.push(unsafe { text.get_unchecked(pos..i) });
-                            pos = i;
-                            brace_stack += 1;
-                        }
+                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache
+                        if chars.next_if(|(_, c)| *c == '{').is_some() =>
+                    {
+                        statics.push(unsafe { text.get_unchecked(pos..i) });
+                        pos = i;
+                        brace_stack += 1;
                     }
                     _ => {}
                 }
@@ -3087,15 +3070,15 @@ pub fn parse_as_interpolated(
                         pos = i + 1;
                         brace_stack = 0;
                     }
-                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache => {
-                        if chars.next_if(|(_, c)| *c == '}').is_some() {
-                            dynamics.push((
-                                unsafe { text.get_unchecked(pos + 2..i) },
-                                base_start + pos + 2,
-                            ));
-                            pos = i + 2;
-                            brace_stack = 0;
-                        }
+                    Language::Jinja | Language::Django | Language::Vento | Language::Mustache
+                        if chars.next_if(|(_, c)| *c == '}').is_some() =>
+                    {
+                        dynamics.push((
+                            unsafe { text.get_unchecked(pos + 2..i) },
+                            base_start + pos + 2,
+                        ));
+                        pos = i + 2;
+                        brace_stack = 0;
                     }
                     _ => {}
                 }

@@ -77,3 +77,9 @@ There are {{ count }} {{ name }} objects.
 </ul>
 {% endraw %}
 {% if kenny.sick %}{% include "root/long_directory_name/very_long_subdirectory_name/chevron-right.svg" %}{% endif %}
+
+{% call(user) dump_users(list_of_user) %}
+    <dl>
+        <dt>Realname</dt>
+    </dl>
+{% endcall %}

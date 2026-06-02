@@ -43,20 +43,17 @@ fn run_format_test(
     options: &FormatOptions,
     language: Language,
 ) -> String {
-    let output = format_text(input, language, options, |code, _| Ok::<_, ()>(code.into()))
+    let output = format_text(input, language, options, |code, _| Ok(code.into()))
         .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
         .unwrap();
-    let regression_format = format_text(&output, language, options, |code, _| {
-        Ok::<_, ()>(code.into())
-    })
-    .map_err(|err| {
-        format!(
-            "syntax error in stability test '{}': {:?}",
-            path.display(),
-            err
-        )
-    })
-    .unwrap();
+    let regression_format = format_text(&output, language, options, |code, _| Ok(code.into()))
+        .map_err(|err| {
+            format!(
+                "syntax error in stability test '{}': {err:?}",
+                path.display(),
+            )
+        })
+        .unwrap();
     similar_asserts::assert_eq!(
         output,
         regression_format,
