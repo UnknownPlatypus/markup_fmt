@@ -901,7 +901,9 @@ impl<'s> DocGen<'s> for Element<'s> {
             docs.push(trailing_ws);
         }
 
-        docs.push(Doc::text(format!("</{formatted_tag_name}>")));
+        if !self.open_only {
+            docs.push(Doc::text(format!("</{formatted_tag_name}>")));
+        }
 
         Doc::list(docs).group()
     }

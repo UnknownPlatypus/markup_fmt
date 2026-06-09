@@ -153,6 +153,10 @@ pub struct Element<'s> {
     pub children: Vec<Node<'s>>,
     pub self_closing: bool,
     pub void_element: bool,
+    /// True when the element's close tag appears outside this node (e.g. inside
+    /// a sibling `{% if %}` block). The printer omits the close tag so that the
+    /// raw `</tag>` that was parsed as text elsewhere is preserved verbatim.
+    pub open_only: bool,
 }
 
 #[derive(Debug)]

@@ -73,6 +73,32 @@ impl<'s> Parser<'s> {
             .unwrap_or(self.source.len())
     }
 
+    /// Returns true when the next characters are a Jinja `{% if %}` end/branch
+    /// tag: `endif`, `else`, `elif`, or `elseif`.
+    ///
+    /// These tags delimit branches of a `{% if %}` block. An HTML element opened
+    /// inside one branch (e.g. `{% if forloop.first %}<small>`) can legitimately
+    /// have its close tag in a sibling branch or a later `{% if %}` block, so
+    /// `parse_element` should stop and return an `open_only` element instead of
+    /// erroring. Does not consume any characters.
+    fn peek_jinja_if_end_or_branch_tag(&mut self) -> bool {
+        let Some((pos, '{')) = self.chars.peek().copied() else {
+            return false;
+        };
+        let Some(rest) = self.source[pos..].strip_prefix("{%") else {
+            return false;
+        };
+        let rest = rest.trim_start_matches(['+', '-']).trim_ascii_start();
+        // Extract the tag name (alphanumeric + underscore)
+        let tag_name_end = rest
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .unwrap_or(rest.len());
+        matches!(
+            &rest[..tag_name_end],
+            "endif" | "else" | "elif" | "elseif"
+        )
+    }
+
     fn emit_error(&mut self, kind: SyntaxErrorKind) -> SyntaxError {
         let pos = self.peek_pos();
         self.emit_error_with_pos(kind, pos)
@@ -1021,6 +1047,7 @@ impl<'s> Parser<'s> {
                                 children: vec![],
                                 self_closing: true,
                                 void_element,
+                                open_only: false,
                             });
                         }
                         Some((_, '/' | '*')) if self.language == Language::Svelte => {
@@ -1039,6 +1066,7 @@ impl<'s> Parser<'s> {
                             children: vec![],
                             self_closing: false,
                             void_element,
+                            open_only: false,
                         });
                     }
                     break;
@@ -1109,6 +1137,20 @@ impl<'s> Parser<'s> {
                     children.push(self.parse_node()?);
                 }
                 Some(..) => {
+                    if !should_parse_raw
+                        && matches!(self.language, Language::Jinja | Language::Django)
+                        && self.peek_jinja_if_end_or_branch_tag()
+                    {
+                        return Ok(Element {
+                            tag_name,
+                            attrs,
+                            first_attr_same_line,
+                            children,
+                            self_closing: false,
+                            void_element: false,
+                            open_only: true,
+                        });
+                    }
                     if should_parse_raw {
                         let text_node = self.parse_raw_text_node(tag_name)?;
                         let raw = text_node.raw;
@@ -1140,6 +1182,7 @@ impl<'s> Parser<'s> {
             children,
             self_closing: false,
             void_element,
+            open_only: false,
         })
     }
 
