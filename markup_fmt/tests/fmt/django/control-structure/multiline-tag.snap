@@ -3,9 +3,7 @@ source: markup_fmt/tests/fmt.rs
 ---
 <label
   class="field__label"
-  {% if child.id_for_label %}
-    for="{{ child.id_for_label }}"
-  {% endif %}
+  {% if child.id_for_label %}for="{{ child.id_for_label }}"{% endif %}
 >
   {{ child.block.label }}
 </label>

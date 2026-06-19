@@ -951,6 +951,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Attribute<'s>> {
                 })
                 .collect(),
         )
+        .group()
     }
 }
 
