@@ -1035,7 +1035,7 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
                 })
                 .append(Doc::text("}}"))
                 .group(),
-            Language::Django => Doc::text(format!("{{{{ {} }}}}", self.expr.trim())),
+            Language::Django => Doc::text(format!("{{{{ {} }}}}", collapse_django_ws(self.expr))),
             _ => unreachable!(),
         }
     }
@@ -1079,7 +1079,7 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
                     .append(Doc::text("%}"))
                     .group()
             }
-            Language::Django => Doc::text(format!("{{% {} %}}", self.content.trim())),
+            Language::Django => Doc::text(format!("{{% {} %}}", collapse_django_ws(self.content))),
             _ => unreachable!(),
         }
     }
@@ -2194,6 +2194,21 @@ impl<'s> DocGen<'s> for XmlDecl<'s> {
             .nest(ctx.indent_width)
             .append(Doc::text("?>"))
             .group()
+    }
+}
+
+/// Collapse a multi-line Django tag/interpolation onto a single line, trimming each interior line.
+fn collapse_django_ws(s: &str) -> Cow<'_, str> {
+    let s = s.trim();
+    if s.contains('\n') {
+        Cow::Owned(
+            s.split('\n')
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .join(" "),
+        )
+    } else {
+        Cow::Borrowed(s)
     }
 }
 

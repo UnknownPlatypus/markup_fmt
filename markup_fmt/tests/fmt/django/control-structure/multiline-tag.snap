@@ -1,0 +1,21 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<label
+  class="field__label"
+  {% if child.id_for_label %}
+    for="{{ child.id_for_label }}"
+  {% endif %}
+>
+  {{ child.block.label }}
+</label>
+
+{% if x %}a{% endif %}
+
+{{ foo.bar }}
+
+{# single-line content below must be left untouched (no over-collapsing) #}
+{% if a   and   b %}x{% endif %}
+{% trans "hello   world" %}
+{{ value|default:"a   b" }}
+{% url 'v' arg1   arg2 %}
