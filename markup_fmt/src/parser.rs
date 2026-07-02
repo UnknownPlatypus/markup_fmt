@@ -1463,6 +1463,7 @@ impl<'s> Parser<'s> {
                         | "tag"
                         | "timezone"
                         | "upper"
+                        | "verbatim"
                         | "with"
                 )
                 || self.custom_blocks.iter().any(|s| s == tag_name))

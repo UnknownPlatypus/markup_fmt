@@ -2380,7 +2380,7 @@ where
     }) || if let NodeKind::JinjaBlock(block) = &node.kind
         && let Some(JinjaTagOrChildren::Tag(tag)) = block.body.first()
     {
-        tag.content.trim_ascii() == "raw"
+        matches!(parse_jinja_tag_name(tag), "raw" | "verbatim")
     } else {
         false
     }

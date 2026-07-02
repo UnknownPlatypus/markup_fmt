@@ -1,0 +1,12 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{% verbatim %}
+<div>   {{ notDjango }}
+      <span>keep    this</span>
+</div>
+{% endverbatim %}
+
+{% verbatim myblock %}
+    {{ if dying }}Still alive.{{ endif }}
+{% endverbatim myblock %}
