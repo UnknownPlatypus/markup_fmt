@@ -234,10 +234,10 @@ pub struct LanguageOptions {
     pub custom_blocks: Option<Vec<String>>,
 
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreCommentDirective"))]
-    pub ignore_comment_directive: String,
+    pub ignore_comment_directive: Vec<String>,
 
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreFileCommentDirective"))]
-    pub ignore_file_comment_directive: String,
+    pub ignore_file_comment_directive: Vec<String>,
 }
 
 impl Default for LanguageOptions {
@@ -285,8 +285,8 @@ impl Default for LanguageOptions {
             script_formatter: None,
             preserve_unquoted_attrs: false,
             custom_blocks: None,
-            ignore_comment_directive: "markup-fmt-ignore".into(),
-            ignore_file_comment_directive: "markup-fmt-ignore-file".into(),
+            ignore_comment_directive: vec!["markup-fmt-ignore".into()],
+            ignore_file_comment_directive: vec!["markup-fmt-ignore-file".into()],
         }
     }
 }

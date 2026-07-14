@@ -72,10 +72,15 @@ where
             ..
         } = child
         {
-            raw.trim_start()
-                .strip_prefix(&options.language.ignore_file_comment_directive)
-                .is_some_and(|rest| {
-                    rest.starts_with(|c: char| c.is_ascii_whitespace()) || rest.is_empty()
+            let trimmed = raw.trim_start();
+            options
+                .language
+                .ignore_file_comment_directive
+                .iter()
+                .any(|directive| {
+                    trimmed.strip_prefix(directive).is_some_and(|rest| {
+                        rest.starts_with(|c: char| c.is_ascii_whitespace()) || rest.is_empty()
+                    })
                 })
         } else {
             false
