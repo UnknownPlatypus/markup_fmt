@@ -1036,7 +1036,10 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
                 })
                 .append(Doc::text("}}"))
                 .group(),
-            Language::Django => Doc::text(format!("{{{{ {} }}}}", collapse_django_ws(self.expr))),
+            Language::Django => Doc::text(format!(
+                "{{{{ {} }}}}",
+                collapse_django_ws(&ctx.format_jinja(self.expr, self.start, true, state))
+            )),
             _ => unreachable!(),
         }
     }
@@ -1080,7 +1083,10 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
                     .append(Doc::text("%}"))
                     .group()
             }
-            Language::Django => Doc::text(format!("{{% {} %}}", collapse_django_ws(self.content))),
+            Language::Django => Doc::text(format!(
+                "{{% {} %}}",
+                collapse_django_ws(&ctx.format_jinja(self.content, self.start, false, state))
+            )),
             _ => unreachable!(),
         }
     }
