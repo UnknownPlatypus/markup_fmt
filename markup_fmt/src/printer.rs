@@ -184,7 +184,8 @@ impl<'s> DocGen<'s> for AngularInterpolation<'s> {
             .concat(reflow_with_indent(
                 ctx.try_format_expr(self.expr, false, self.start)
                     .as_deref()
-                    .unwrap_or(self.expr),
+                    .unwrap_or(self.expr)
+                    .trim_ascii(),
                 true,
             ))
             .nest(ctx.indent_width)
@@ -236,17 +237,24 @@ impl<'s> DocGen<'s> for AngularSwitchArm<'s> {
         let mut docs = Vec::with_capacity(5);
         docs.push(Doc::text(format!("@{}", self.keyword)));
         if let Some(expr) = self.expr {
-            docs.push(Doc::text(" ("));
+            docs.push(Doc::space());
+            if !self.expr_naked {
+                docs.push(Doc::char('('));
+            }
             docs.push(Doc::text(ctx.format_expr(expr.0, false, expr.1)));
-            docs.push(Doc::char(')'));
+            if !self.expr_naked {
+                docs.push(Doc::char(')'));
+            }
         }
-        docs.push(Doc::text(" {"));
-        docs.push(format_control_structure_block_children(
-            &self.children,
-            ctx,
-            state,
-        ));
-        docs.push(Doc::char('}'));
+        if let Some(children) = &self.children {
+            docs.push(Doc::text(" {"));
+            docs.push(format_control_structure_block_children(
+                children, ctx, state,
+            ));
+            docs.push(Doc::char('}'));
+        } else {
+            docs.push(Doc::char(';'));
+        }
         Doc::list(docs)
     }
 }
@@ -2031,6 +2039,21 @@ impl<'s> DocGen<'s> for VueDirective<'s> {
                 });
                 if let Some(arg_and_modifiers) = self.arg_and_modifiers {
                     docs.push(Doc::text(arg_and_modifiers.trim_start_matches(':')));
+                }
+            }
+            "." => {
+                is_v_bind = true;
+                let is_long_style = matches!(ctx.options.v_bind_style, Some(VBindStyle::Long));
+                if is_long_style {
+                    docs.push(Doc::text("v-bind:"));
+                } else {
+                    docs.push(Doc::char('.'));
+                }
+                if let Some(arg_and_modifiers) = self.arg_and_modifiers {
+                    docs.push(Doc::text(arg_and_modifiers));
+                }
+                if is_long_style {
+                    docs.push(Doc::text(".prop"));
                 }
             }
             "bind" => {

@@ -489,7 +489,8 @@ impl<'s> Parser<'s> {
                     arms.push(AngularSwitchArm {
                         keyword: "case",
                         expr: Some(expr),
-                        children,
+                        expr_naked: false,
+                        children: Some(children),
                     });
                     self.skip_ws();
                 }
@@ -498,10 +499,20 @@ impl<'s> Parser<'s> {
                         return Err(self.emit_error(SyntaxErrorKind::ExpectKeyword("default")));
                     }
                     self.skip_ws();
+                    let (expr, children) = if matches!(self.chars.peek(), Some((_, '{'))) {
+                        (None, Some(self.parse_angular_control_flow_children()?))
+                    } else {
+                        let start = self.peek_pos();
+                        let expr =
+                            self.try_parse(|parser| parser.parse_angular_inline_script(start));
+                        self.chars.next_if(|(_, c)| *c == ';');
+                        (expr.ok(), None)
+                    };
                     arms.push(AngularSwitchArm {
                         keyword: "default",
-                        expr: None,
-                        children: self.parse_angular_control_flow_children()?,
+                        expr,
+                        expr_naked: true,
+                        children,
                     });
                     self.skip_ws();
                 }
@@ -1638,35 +1649,13 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_mustache_interpolation(&mut self) -> PResult<(&'s str, usize)> {
-        let Some((start, _)) = self.try_consume_str("{{") else {
+        if self.try_consume_str("{{").is_none() {
             return Err(self.emit_error(SyntaxErrorKind::ExpectMustacheInterpolation));
-        };
-        let start = start + 1;
-
-        let mut braces_stack = 0usize;
-        let end;
-        loop {
-            match self.chars.next() {
-                Some((_, '{')) => braces_stack += 1,
-                Some((i, '}')) => {
-                    if braces_stack == 0 {
-                        if self.chars.next_if(|(_, c)| *c == '}').is_some() {
-                            end = i;
-                            break;
-                        }
-                    } else {
-                        braces_stack -= 1;
-                    }
-                }
-                Some(..) => continue,
-                None => {
-                    end = self.source.len();
-                    break;
-                }
-            }
         }
+        let (raw, start) = self.parse_svelte_or_astro_expr()?;
+        self.chars.next_if(|(_, c)| *c == '}');
 
-        Ok((unsafe { self.source.get_unchecked(start..end) }, start))
+        Ok((raw, start))
     }
 
     fn parse_native_attr(&mut self) -> PResult<NativeAttribute<'s>> {
@@ -2451,25 +2440,46 @@ impl<'s> Parser<'s> {
 
     /// This will consume `}`.
     fn parse_svelte_or_astro_expr(&mut self) -> PResult<(&'s str, usize)> {
-        self.skip_ws();
-
         let start = self.peek_pos();
-        let mut end = start;
-        let mut braces_stack = 0u8;
+        let end;
+
+        let mut pair_stack = vec![];
         loop {
             match self.chars.next() {
                 Some((_, '{')) => {
-                    braces_stack += 1;
+                    if !matches!(pair_stack.last(), Some('\'' | '"' | '`')) {
+                        pair_stack.push('{');
+                    }
                 }
                 Some((i, '}')) => {
-                    if braces_stack == 0 {
+                    if pair_stack.is_empty() {
                         end = i;
                         break;
+                    } else {
+                        pair_stack.pop();
                     }
-                    braces_stack -= 1;
+                }
+                Some((_, c @ '\'' | c @ '"' | c @ '`')) => match pair_stack.last() {
+                    Some(last) if *last == c => {
+                        pair_stack.pop();
+                    }
+                    Some('$' | '{') | None => {
+                        pair_stack.push(c);
+                    }
+                    _ => {}
+                },
+                Some((_, '$')) => {
+                    if matches!(pair_stack.last(), Some('`'))
+                        && self.chars.next_if(|(_, c)| *c == '{').is_some()
+                    {
+                        pair_stack.push('$');
+                    }
                 }
                 Some(..) => continue,
-                None => break,
+                None => {
+                    end = self.source.len();
+                    break;
+                }
             }
         }
         Ok((unsafe { self.source.get_unchecked(start..end) }, start))
@@ -2811,6 +2821,10 @@ impl<'s> Parser<'s> {
                 self.chars.next();
                 ":"
             }
+            Some((_, '.')) => {
+                self.chars.next();
+                "."
+            }
             Some((_, '@')) => {
                 self.chars.next();
                 "@"
@@ -2832,7 +2846,7 @@ impl<'s> Parser<'s> {
             _ => return Err(self.emit_error(SyntaxErrorKind::ExpectVueDirective)),
         };
 
-        let arg_and_modifiers = if matches!(name, ":" | "@" | "#")
+        let arg_and_modifiers = if matches!(name, ":" | "." | "@" | "#")
             || self
                 .chars
                 .peek()
