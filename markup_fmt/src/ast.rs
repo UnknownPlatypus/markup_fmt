@@ -111,6 +111,7 @@ pub enum Attribute<'s> {
     JinjaTag(JinjaTag<'s>),
     JsComment(JsComment<'s>),
     Native(NativeAttribute<'s>),
+    Raw(&'s str),
     Svelte(SvelteAttribute<'s>),
     SvelteAttachment(SvelteAttachment<'s>),
     VentoTagOrBlock(NodeKind<'s>),

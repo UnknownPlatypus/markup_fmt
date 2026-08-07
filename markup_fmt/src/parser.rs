@@ -3018,8 +3018,8 @@ impl<'s> HasJinjaFlowControl<'s> for Attribute<'s> {
         true
     }
 
-    fn from_raw_text(_raw: &'s str) -> Self::Intermediate {
-        unreachable!("raw text blocks should not appear in attributes")
+    fn from_raw_text(raw: &'s str) -> Self::Intermediate {
+        Attribute::Raw(raw)
     }
 }
 

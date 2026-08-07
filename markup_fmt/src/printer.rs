@@ -372,6 +372,7 @@ impl<'s> DocGen<'s> for Attribute<'s> {
             Attribute::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             Attribute::VentoTagOrBlock(vento_tag_or_block) => vento_tag_or_block.doc(ctx, state),
             Attribute::JsComment(js_comment) => js_comment.doc(ctx, state),
+            Attribute::Raw(raw) => Doc::text(*raw),
         }
     }
 }
@@ -936,6 +937,31 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Attribute<'s>> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
+        // A `{% comment %}` body is raw text, not real attributes: print it verbatim (see `JinjaBlock<Node>`).
+        let is_raw_content_block = self.body.first().is_some_and(|first| {
+            matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment"))
+        });
+
+        if is_raw_content_block {
+            return Doc::list(
+                self.body
+                    .iter()
+                    .map(|child| match child {
+                        JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
+                        JinjaTagOrChildren::Children(children) => Doc::list(
+                            children
+                                .iter()
+                                .map(|attr| match attr {
+                                    Attribute::Raw(raw) => Doc::text(*raw),
+                                    _ => attr.doc(ctx, state),
+                                })
+                                .collect(),
+                        ),
+                    })
+                    .collect(),
+            );
+        }
+
         Doc::list(
             self.body
                 .iter()
@@ -2345,7 +2371,8 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
             expr: (value, ..), ..
         })
         | Attribute::JinjaComment(JinjaComment { raw: value, .. })
-        | Attribute::JinjaTag(JinjaTag { content: value, .. }) => value.contains('\n'),
+        | Attribute::JinjaTag(JinjaTag { content: value, .. })
+        | Attribute::Raw(value) => value.contains('\n'),
         // Templating blocks usually span across multiple lines so let's just assume true.
         Attribute::JinjaBlock(..) | Attribute::VentoTagOrBlock(..) => true,
         Attribute::JsComment(comment) => comment.raw.contains('\n'),

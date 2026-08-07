@@ -1,0 +1,13 @@
+<li
+    class="item"
+    {% comment %}
+        Update the URL when the user selects a costed period.
+
+        This allows us to pass around direct links to specific pages.
+    {% endcomment %}
+    hx-push-url="/x/"
+>
+    content
+</li>
+
+<a {% comment %}inline note{% endcomment %} href="x">y</a>
