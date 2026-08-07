@@ -108,6 +108,7 @@ pub enum Attribute<'s> {
     Astro(AstroAttribute<'s>),
     JinjaBlock(JinjaBlock<'s, Attribute<'s>>),
     JinjaComment(JinjaComment<'s>),
+    JinjaRawText(&'s str),
     JinjaTag(JinjaTag<'s>),
     JsComment(JsComment<'s>),
     Native(NativeAttribute<'s>),

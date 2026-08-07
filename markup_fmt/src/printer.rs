@@ -369,6 +369,7 @@ impl<'s> DocGen<'s> for Attribute<'s> {
             Attribute::Astro(astro_attribute) => astro_attribute.doc(ctx, state),
             Attribute::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
             Attribute::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
+            Attribute::JinjaRawText(raw) => Doc::text(*raw),
             Attribute::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             Attribute::VentoTagOrBlock(vento_tag_or_block) => vento_tag_or_block.doc(ctx, state),
             Attribute::JsComment(js_comment) => js_comment.doc(ctx, state),
@@ -2355,6 +2356,7 @@ fn is_multi_line_attr(attr: &Attribute) -> bool {
         // Templating blocks usually span across multiple lines so let's just assume true.
         Attribute::JinjaBlock(..) | Attribute::VentoTagOrBlock(..) => true,
         Attribute::JsComment(comment) => comment.raw.contains('\n'),
+        Attribute::JinjaRawText(raw) => raw.contains('\n'),
     }
 }
 
