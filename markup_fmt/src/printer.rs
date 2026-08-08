@@ -377,7 +377,7 @@ impl<'s> DocGen<'s> for Attribute<'s> {
             Attribute::Astro(astro_attribute) => astro_attribute.doc(ctx, state),
             Attribute::JinjaBlock(jinja_block) => jinja_block.doc(ctx, state),
             Attribute::JinjaComment(jinja_comment) => jinja_comment.doc(ctx, state),
-            Attribute::JinjaRawText(raw) => Doc::text(*raw),
+            Attribute::JinjaRawText(raw) => format_raw_content(raw, true),
             Attribute::JinjaTag(jinja_tag) => jinja_tag.doc(ctx, state),
             Attribute::VentoTagOrBlock(vento_tag_or_block) => vento_tag_or_block.doc(ctx, state),
             Attribute::JsComment(js_comment) => js_comment.doc(ctx, state),
@@ -950,13 +950,17 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Attribute<'s>> {
                 .iter()
                 .map(|child| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
-                    JinjaTagOrChildren::Children(children) => Doc::line_or_nil()
-                        .concat(itertools::intersperse(
-                            children.iter().map(|attr| attr.doc(ctx, state)),
-                            Doc::line_or_space(),
-                        ))
-                        .nest(ctx.indent_width)
-                        .append(Doc::line_or_nil()),
+                    JinjaTagOrChildren::Children(children) => match children.as_slice() {
+                        // Django comment content is raw text, so it isn't wrapped nor re-indented.
+                        [Attribute::JinjaRawText(raw)] => format_raw_content(raw, true),
+                        children => Doc::line_or_nil()
+                            .concat(itertools::intersperse(
+                                children.iter().map(|attr| attr.doc(ctx, state)),
+                                Doc::line_or_space(),
+                            ))
+                            .nest(ctx.indent_width)
+                            .append(Doc::line_or_nil()),
+                    },
                 })
                 .collect(),
         )
@@ -983,7 +987,12 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => {
                         if is_raw_content_block {
-                            Doc::list(children.iter().map(|node| Doc::text(node.raw)).collect())
+                            Doc::list(
+                                children
+                                    .iter()
+                                    .map(|node| format_raw_content(node.raw, true))
+                                    .collect(),
+                            )
                         } else {
                             format_control_structure_block_children(children, ctx, state)
                         }
@@ -2519,12 +2528,7 @@ where
                 |(mut docs, is_prev_text_like), (i, child)| {
                     let is_current_text_like = is_text_like(child, ctx.language);
                     if should_ignore_node(child, i, children, ctx) {
-                        let raw = child.raw.trim_end_matches([' ', '\t']);
-                        let last_line_break_removed = raw.strip_suffix(['\n', '\r']);
-                        docs.extend(reflow_raw(last_line_break_removed.unwrap_or(raw)));
-                        if i < children.len() - 1 && last_line_break_removed.is_some() {
-                            docs.push(Doc::hard_line());
-                        }
+                        docs.push(format_raw_content(child.raw, i < children.len() - 1));
                     } else {
                         let maybe_hard_line = if is_prev_text_like || is_current_text_like {
                             None
@@ -2607,12 +2611,7 @@ where
                 (Vec::with_capacity(children.len() * 2), true),
                 |(mut docs, is_prev_text_like), (i, child)| {
                     if should_ignore_node(child, i, children, ctx) {
-                        let raw = child.raw.trim_end_matches([' ', '\t']);
-                        let last_line_break_removed = raw.strip_suffix(['\n', '\r']);
-                        docs.extend(reflow_raw(last_line_break_removed.unwrap_or(raw)));
-                        if i < children.len() - 1 && last_line_break_removed.is_some() {
-                            docs.push(Doc::hard_line());
-                        }
+                        docs.push(format_raw_content(child.raw, i < children.len() - 1));
                     } else if let NodeKind::Text(text_node) = &child.kind {
                         let is_first = i == 0;
                         let is_last = i + 1 == children.len();
@@ -2772,6 +2771,23 @@ where
         format!("({left}) {delimiter} {right}")
     } else {
         format!("{left} {delimiter} {right}")
+    }
+}
+
+/// Print content as-is, re-indenting what follows it (usually a closing tag).
+fn format_raw_content(raw: &str, reindent_next: bool) -> Doc<'_> {
+    // Trailing spaces/tabs are the closing tag's indentation, only strip them
+    // alongside a final line break. Same-line content is kept untouched.
+    match raw.trim_end_matches([' ', '\t']).strip_suffix(['\n', '\r']) {
+        Some(trimmed) => {
+            let doc = Doc::list(reflow_raw(trimmed).collect());
+            if reindent_next {
+                doc.append(Doc::hard_line())
+            } else {
+                doc
+            }
+        }
+        None => Doc::list(reflow_raw(raw).collect()),
     }
 }
 

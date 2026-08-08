@@ -18,11 +18,11 @@ source: markup_fmt/tests/fmt.rs
             ...
         {% endfor %}
 
-        {% endcomment %}
+    {% endcomment %}
     {% comment %}
             Props:
               - form: AddStaffForm
-        {% endcomment %}
+    {% endcomment %}
   </body>
 </html>
 {% comment %}
@@ -52,7 +52,26 @@ source: markup_fmt/tests/fmt.rs
 {% if site_info.IS_RAVEN_INSTALLED %}
 <script>Raven.config('{% sentry_public_dsn %}').install()</script>
 {% endif %}
-    {% endcomment %}
+      {% endcomment %}
     </div>
   </div>
+</div>
+
+<div id="listing-results" hidden>
+  {% comment %} Not implemented, hide content to avoid confusion {% endcomment %}
+</div>
+
+<button class="x" {% comment %}inline note{% endcomment %} type="button">
+  y
+</button>
+<div>
+  <button
+    class="x"
+    {% comment %}
+    a note about the attribute below
+    {% endcomment %}
+    type="button"
+  >
+    y
+  </button>
 </div>
