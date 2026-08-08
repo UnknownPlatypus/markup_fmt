@@ -1439,45 +1439,48 @@ impl<'s> Parser<'s> {
             }
 
             Ok(T::from_block(JinjaBlock { body }))
-        } else if (matches!(
-            tag_name,
-            "for"
-                | "if"
-                | "macro"
-                | "call"
-                | "filter"
-                | "block"
-                | "apply"
-                | "autoescape"
-                | "embed"
-                | "with"
-                | "raw"
-        ) || tag_name == "set" && !first_tag.content.contains('='))
-            || (matches!(self.language, Language::Jinja) && tag_name == "trans")
+        } else if !matches!(self.language, Language::Django)
+            && ((matches!(
+                tag_name,
+                "for"
+                    | "if"
+                    | "macro"
+                    | "call"
+                    | "filter"
+                    | "block"
+                    | "apply"
+                    | "autoescape"
+                    | "embed"
+                    | "with"
+                    | "raw"
+            ) || tag_name == "set" && !first_tag.content.contains('='))
+                || (matches!(self.language, Language::Jinja) && tag_name == "trans"))
+            // Django's built-in block tags, from `django.template.defaulttags`,
+            // `django.template.loader_tags` and `django.templatetags`.
             || (matches!(self.language, Language::Django)
                 && matches!(
                     tag_name,
                     "autoescape"
                         | "block"
-                        | "blocktrans"
+                        | "blocktrans" // Legacy alias of `blocktranslate`
                         | "blocktranslate"
                         | "cache"
                         | "filter"
                         | "for"
                         | "if"
                         | "ifchanged"
+                        | "ifequal" // Removed in Django 4.0, kept for backward compat
+                        | "ifnotequal" // Removed in Django 4.0, kept for backward compat
                         | "language"
                         | "localize"
                         | "localtime"
                         | "partialdef"
                         | "spaceless"
-                        | "tag"
                         | "timezone"
-                        | "upper"
                         | "verbatim"
                         | "with"
-                )
-                || self.custom_blocks.iter().any(|s| s == tag_name))
+                ))
+            || self.custom_blocks.iter().any(|s| s == tag_name)
         {
             let tag_start = first_tag.start;
             let mut body = vec![JinjaTagOrChildren::Tag(first_tag)];
@@ -1503,7 +1506,8 @@ impl<'s> Parser<'s> {
                     }
                     if tag_name == "if" && matches!(next_tag_name, "elif" | "elseif" | "else")
                         || tag_name == "for" && matches!(next_tag_name, "else" | "empty")
-                        || tag_name == "ifchanged" && next_tag_name == "else"
+                        || matches!(tag_name, "ifchanged" | "ifequal" | "ifnotequal")
+                            && next_tag_name == "else"
                         || matches!(tag_name, "blocktrans" | "blocktranslate")
                             && next_tag_name == "plural"
                     {

@@ -1,0 +1,6 @@
+{% ifequal user.id comment.user_id %}
+<p>same</p>
+{% else %}
+<p>different</p>
+{% endifequal %}
+{% ifnotequal a b %}<p>differ</p>{% endifnotequal %}
