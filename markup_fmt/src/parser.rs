@@ -34,12 +34,6 @@ pub struct Parser<'s> {
     language: Language,
     custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
-    state: ParserState,
-}
-
-#[derive(Default)]
-struct ParserState {
-    has_front_matter: bool,
 }
 
 impl<'s> Parser<'s> {
@@ -49,7 +43,6 @@ impl<'s> Parser<'s> {
             language,
             custom_blocks,
             chars: source.char_indices().peekable(),
-            state: Default::default(),
         }
     }
 
@@ -1224,7 +1217,6 @@ impl<'s> Parser<'s> {
             }
         }
 
-        self.state.has_front_matter = true;
         Ok(FrontMatter {
             raw: unsafe { self.source.get_unchecked(start..end) },
             start,
@@ -1819,7 +1811,7 @@ impl<'s> Parser<'s> {
                     },
                 }
             }
-            Some((_, '-'))
+            Some((i, '-'))
                 if matches!(
                     self.language,
                     Language::Html
@@ -1828,7 +1820,7 @@ impl<'s> Parser<'s> {
                         | Language::Jinja
                         | Language::Vento
                         | Language::Mustache
-                ) && !self.state.has_front_matter =>
+                ) && is_front_matter_start(self.source, *i) =>
             {
                 let mut chars = self.chars.clone();
                 chars.next();
@@ -2633,7 +2625,8 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some((i, '-'))
-                    if matches!(self.language, Language::Astro) && !self.state.has_front_matter =>
+                    if matches!(self.language, Language::Astro)
+                        && is_front_matter_start(self.source, *i) =>
                 {
                     let i = *i;
                     let mut chars = self.chars.clone();
@@ -2905,6 +2898,11 @@ impl<'s> Parser<'s> {
         }
         Ok(XmlDecl { attrs })
     }
+}
+
+/// Front matter is only front matter at the very top of the document, otherwise `---` is plain text.
+fn is_front_matter_start(source: &str, offset: usize) -> bool {
+    source[..offset].trim_end().is_empty()
 }
 
 /// Returns true if the provided character is a valid HTML tag name character.
