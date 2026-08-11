@@ -758,7 +758,10 @@ impl<'s> DocGen<'s> for Element<'s> {
                             ) {
                                 Doc::hard_line().concat(reflow_owned(formatted.trim()))
                             } else {
-                                Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true))
+                                Doc::hard_line().concat(dedent_and_reflow(
+                                    formatted.trim(),
+                                    Some(ctx.indent_width),
+                                ))
                             };
                             if is_script_indent {
                                 docs.push(doc.nest(ctx.indent_width));
@@ -2272,18 +2275,24 @@ fn reflow_with_indent<'i, 'o: 'i>(
     s: &'i str,
     detect_indent: bool,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let indent = if detect_indent {
-        helpers::detect_indent(s)
-    } else {
-        0
-    };
+    // Text coming from the formatter is space-indented, so tab width doesn't matter.
+    dedent_and_reflow(s, detect_indent.then_some(1))
+}
+
+/// `tab_width` is the number of columns a tab stands for when comparing the
+/// indentation of lines, or `None` to leave indentation as is.
+fn dedent_and_reflow<'i, 'o: 'i>(
+    s: &'i str,
+    tab_width: Option<usize>,
+) -> impl Iterator<Item = Doc<'o>> + 'i {
+    let (indent, tab_width) = tab_width.map_or((0, 0), |w| (helpers::detect_indent(s, w), w));
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
         let trimmed = if s.starts_with([' ', '\t']) {
-            s.get(indent..).unwrap_or(s)
+            helpers::strip_indent(s, indent, tab_width)
         } else {
-            s
+            Cow::from(s)
         };
         let should_keep_raw = matches!(pair_stack.last(), Some('`'));
 
@@ -2337,7 +2346,7 @@ fn reflow_with_indent<'i, 'o: 'i>(
             if should_keep_raw {
                 Doc::text(s.to_owned())
             } else {
-                Doc::text(trimmed.to_owned())
+                Doc::text(trimmed.into_owned())
             },
         ]
         .into_iter()

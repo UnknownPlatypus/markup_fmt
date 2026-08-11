@@ -191,18 +191,43 @@ pub(crate) fn parse_vento_tag(tag: &str) -> (&str, &str) {
 pub(crate) static UNESCAPING_AC: LazyLock<AhoCorasick> =
     LazyLock::new(|| AhoCorasick::new(["&quot;", "&#x22;", "&#x27;"]).unwrap());
 
-pub(crate) fn detect_indent(s: &str) -> usize {
+/// Width of the smallest indentation among non-blank lines, in columns.
+/// a space = a column, a tab = tab_width columns
+pub(crate) fn detect_indent(s: &str, tab_width: usize) -> usize {
     s.lines()
         .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
-            line.as_bytes()
-                .iter()
-                .take_while(|byte| byte.is_ascii_whitespace())
-                .count()
+            line.chars()
+                .take_while(|c| matches!(c, ' ' | '\t'))
+                .map(|c| if c == '\t' { tab_width } else { 1 })
+                .sum()
         })
         .min()
         .unwrap_or_default()
+}
+
+/// Drop `indent` columns of indentation, re-emitting a tab straddling the cut as spaces.
+pub(crate) fn strip_indent(line: &str, indent: usize, tab_width: usize) -> Cow<'_, str> {
+    let mut width = 0;
+    for (i, c) in line.char_indices() {
+        if width == indent {
+            return Cow::from(&line[i..]);
+        }
+        width += match c {
+            ' ' => 1,
+            '\t' => tab_width,
+            _ => return Cow::from(&line[i..]),
+        };
+        if width > indent {
+            return Cow::from(format!(
+                "{}{}",
+                " ".repeat(width - indent),
+                &line[i + c.len_utf8()..]
+            ));
+        }
+    }
+    Cow::from("")
 }
 
 pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {
@@ -348,5 +373,21 @@ mod tests {
         assert_eq!(super::pos_to_line_col(source, 2), (1, 3));
         assert_eq!(super::pos_to_line_col(source, 4), (2, 2));
         assert_eq!(super::pos_to_line_col(source, 6), (2, 4));
+    }
+
+    #[test]
+    fn detect_indent() {
+        assert_eq!(super::detect_indent("a\n    b\n    c", 4), 4);
+        assert_eq!(super::detect_indent("    a\n        b", 4), 4);
+        assert_eq!(super::detect_indent("a\n\tb\n    c", 4), 4);
+    }
+
+    #[test]
+    fn strip_indent() {
+        assert_eq!(super::strip_indent("      a", 4, 4), "  a");
+        assert_eq!(super::strip_indent("\t\ta", 4, 4), "\ta");
+        assert_eq!(super::strip_indent("a", 4, 4), "a");
+        assert_eq!(super::strip_indent("   ", 4, 4), "");
+        assert_eq!(super::strip_indent("\ta", 2, 4), "  a");
     }
 }
