@@ -191,18 +191,21 @@ pub(crate) fn parse_vento_tag(tag: &str) -> (&str, &str) {
 pub(crate) static UNESCAPING_AC: LazyLock<AhoCorasick> =
     LazyLock::new(|| AhoCorasick::new(["&quot;", "&#x22;", "&#x27;"]).unwrap());
 
+/// Width of `line`'s own indentation, in columns.
+/// A space counts one column, a tab counts `tab_width` columns.
+fn indent_width(line: &str, tab_width: usize) -> usize {
+    line.chars()
+        .take_while(|c| matches!(c, ' ' | '\t'))
+        .map(|c| if c == '\t' { tab_width } else { 1 })
+        .sum()
+}
+
 /// Width of the smallest indentation among non-blank lines, in columns.
-/// a space = a column, a tab = tab_width columns
 pub(crate) fn detect_indent(s: &str, tab_width: usize) -> usize {
     s.lines()
         .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            line.chars()
-                .take_while(|c| matches!(c, ' ' | '\t'))
-                .map(|c| if c == '\t' { tab_width } else { 1 })
-                .sum()
-        })
+        .map(|line| indent_width(line, tab_width))
         .min()
         .unwrap_or_default()
 }
@@ -215,19 +218,8 @@ pub(crate) fn strip_indent(
     tab_width: usize,
     use_tabs: bool,
 ) -> Cow<'_, str> {
-    let mut width = 0;
-    let mut rest = "";
-    for (i, c) in line.char_indices() {
-        match c {
-            ' ' => width += 1,
-            '\t' => width += tab_width,
-            _ => {
-                rest = &line[i..];
-                break;
-            }
-        }
-    }
-    let extra = width.saturating_sub(indent);
+    let rest = line.trim_start_matches([' ', '\t']);
+    let extra = indent_width(line, tab_width).saturating_sub(indent);
     let (tabs, spaces) = if use_tabs {
         (extra / tab_width, extra % tab_width)
     } else {
@@ -236,17 +228,18 @@ pub(crate) fn strip_indent(
     // The leading whitespace is all ASCII, so slicing it by bytes is safe.
     // When it already ends with the indentation we would emit, borrow it instead.
     let ws = &line[..line.len() - rest.len()];
-    if let Some(tail) = ws
-        .len()
-        .checked_sub(tabs + spaces)
-        .map(|start| &ws[start..])
-    {
-        let (head, tail_spaces) = tail.split_at(tabs);
-        if head.bytes().all(|b| b == b'\t') && tail_spaces.bytes().all(|b| b == b' ') {
-            return Cow::from(&line[ws.len() - tail.len()..]);
+    if let Some(start) = ws.len().checked_sub(tabs + spaces) {
+        let (head, tail) = ws[start..].split_at(tabs);
+        if head.bytes().all(|b| b == b'\t') && tail.bytes().all(|b| b == b' ') {
+            return Cow::from(&line[start..]);
         }
     }
-    Cow::from(format!("{}{}{rest}", "\t".repeat(tabs), " ".repeat(spaces)))
+    Cow::from(format!(
+        "{}{}{}",
+        "\t".repeat(tabs),
+        " ".repeat(spaces),
+        rest
+    ))
 }
 
 pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {
