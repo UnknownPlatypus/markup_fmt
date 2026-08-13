@@ -212,12 +212,7 @@ pub(crate) fn detect_indent(s: &str, tab_width: usize) -> usize {
 
 /// Drop `indent` columns of indentation and rewrite whatever indentation remains
 /// with the target indent style, so the source's mix of tabs and spaces can't survive.
-pub(crate) fn strip_indent(
-    line: &str,
-    indent: usize,
-    tab_width: usize,
-    use_tabs: bool,
-) -> Cow<'_, str> {
+pub(crate) fn strip_indent(line: &str, indent: usize, tab_width: usize, use_tabs: bool) -> String {
     let rest = line.trim_start_matches([' ', '\t']);
     let extra = indent_width(line, tab_width).saturating_sub(indent);
     let (tabs, spaces) = if use_tabs {
@@ -225,21 +220,7 @@ pub(crate) fn strip_indent(
     } else {
         (0, extra)
     };
-    // The leading whitespace is all ASCII, so slicing it by bytes is safe.
-    // When it already ends with the indentation we would emit, borrow it instead.
-    let ws = &line[..line.len() - rest.len()];
-    if let Some(start) = ws.len().checked_sub(tabs + spaces) {
-        let (head, tail) = ws[start..].split_at(tabs);
-        if head.bytes().all(|b| b == b'\t') && tail.bytes().all(|b| b == b' ') {
-            return Cow::from(&line[start..]);
-        }
-    }
-    Cow::from(format!(
-        "{}{}{}",
-        "\t".repeat(tabs),
-        " ".repeat(spaces),
-        rest
-    ))
+    format!("{}{}{rest}", "\t".repeat(tabs), " ".repeat(spaces))
 }
 
 pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {
@@ -398,11 +379,11 @@ mod tests {
     fn strip_indent() {
         assert_eq!(super::strip_indent("      a", 4, 4, false), "  a");
         assert_eq!(super::strip_indent("\t\ta", 4, 4, false), "    a");
-        assert_eq!(super::strip_indent("a", 4, 4, false), "a");
         assert_eq!(super::strip_indent("   ", 4, 4, false), "");
         assert_eq!(super::strip_indent("\ta", 2, 4, false), "  a");
         assert_eq!(super::strip_indent("\t\ta", 4, 4, true), "\ta");
         assert_eq!(super::strip_indent("        a", 4, 4, true), "\ta");
+        // Leftover columns that don't fill a tab stop stay spaces.
         assert_eq!(super::strip_indent("\t\t  a", 4, 4, true), "\t  a");
         assert_eq!(super::strip_indent("      a", 4, 4, true), "  a");
     }

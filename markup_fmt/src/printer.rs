@@ -762,7 +762,8 @@ impl<'s> DocGen<'s> for Element<'s> {
                                 None => Doc::hard_line().concat(dedent_and_reflow(
                                     formatted.trim(),
                                     Indentation::Normalize {
-                                        tab_width: ctx.indent_width,
+                                        // `indent_width` is unvalidated, and a zero tab stop divides by zero.
+                                        tab_width: ctx.indent_width.max(1),
                                         use_tabs: ctx.use_tabs,
                                     },
                                 )),
@@ -2287,6 +2288,32 @@ enum Indentation {
     Normalize { tab_width: usize, use_tabs: bool },
 }
 
+impl Indentation {
+    /// Common indentation to drop from every line.
+    /// `Dedent` measures it with a tab worth one column, that is, in characters.
+    fn common_indent(self, s: &str) -> usize {
+        match self {
+            Indentation::Keep => 0,
+            Indentation::Dedent => helpers::detect_indent(s, 1),
+            Indentation::Normalize { tab_width, .. } => helpers::detect_indent(s, tab_width),
+        }
+    }
+
+    fn apply(self, line: &str, indent: usize) -> Cow<'_, str> {
+        if !line.starts_with([' ', '\t']) {
+            return Cow::from(line);
+        }
+        match self {
+            Indentation::Keep => Cow::from(line),
+            Indentation::Dedent => Cow::from(line.get(indent..).unwrap_or(line)),
+            Indentation::Normalize {
+                tab_width,
+                use_tabs,
+            } => Cow::from(helpers::strip_indent(line, indent, tab_width, use_tabs)),
+        }
+    }
+}
+
 fn reflow_with_indent<'i, 'o: 'i>(
     s: &'i str,
     detect_indent: bool,
@@ -2305,26 +2332,11 @@ fn dedent_and_reflow<'i, 'o: 'i>(
     s: &'i str,
     indentation: Indentation,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let indent = match indentation {
-        Indentation::Keep => 0,
-        Indentation::Dedent => helpers::detect_indent(s, 1),
-        Indentation::Normalize { tab_width, .. } => helpers::detect_indent(s, tab_width),
-    };
+    let indent = indentation.common_indent(s);
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
-        let trimmed = match indentation {
-            Indentation::Dedent if s.starts_with([' ', '\t']) => {
-                Cow::from(s.get(indent..).unwrap_or(s))
-            }
-            Indentation::Normalize {
-                tab_width,
-                use_tabs,
-            } if s.starts_with([' ', '\t']) => {
-                helpers::strip_indent(s, indent, tab_width, use_tabs)
-            }
-            _ => Cow::from(s),
-        };
+        let trimmed = indentation.apply(s, indent);
         let should_keep_raw = matches!(pair_stack.last(), Some('`'));
 
         let mut chars = s.chars().peekable();
