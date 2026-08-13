@@ -22,6 +22,7 @@ where
     pub(crate) source: &'b str,
     pub(crate) language: Language,
     pub(crate) indent_width: usize,
+    pub(crate) use_tabs: bool,
     pub(crate) print_width: usize,
     pub(crate) options: &'b LanguageOptions,
     pub(crate) external_formatter: F,

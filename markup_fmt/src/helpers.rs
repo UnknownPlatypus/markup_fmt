@@ -207,27 +207,46 @@ pub(crate) fn detect_indent(s: &str, tab_width: usize) -> usize {
         .unwrap_or_default()
 }
 
-/// Drop `indent` columns of indentation, re-emitting a tab straddling the cut as spaces.
-pub(crate) fn strip_indent(line: &str, indent: usize, tab_width: usize) -> Cow<'_, str> {
+/// Drop `indent` columns of indentation and rewrite whatever indentation remains
+/// with the target indent style, so the source's mix of tabs and spaces can't survive.
+pub(crate) fn strip_indent(
+    line: &str,
+    indent: usize,
+    tab_width: usize,
+    use_tabs: bool,
+) -> Cow<'_, str> {
     let mut width = 0;
+    let mut rest = "";
     for (i, c) in line.char_indices() {
-        if width == indent {
-            return Cow::from(&line[i..]);
-        }
-        width += match c {
-            ' ' => 1,
-            '\t' => tab_width,
-            _ => return Cow::from(&line[i..]),
-        };
-        if width > indent {
-            return Cow::from(format!(
-                "{}{}",
-                " ".repeat(width - indent),
-                &line[i + c.len_utf8()..]
-            ));
+        match c {
+            ' ' => width += 1,
+            '\t' => width += tab_width,
+            _ => {
+                rest = &line[i..];
+                break;
+            }
         }
     }
-    Cow::from("")
+    let extra = width.saturating_sub(indent);
+    let (tabs, spaces) = if use_tabs {
+        (extra / tab_width, extra % tab_width)
+    } else {
+        (0, extra)
+    };
+    // The leading whitespace is all ASCII, so slicing it by bytes is safe.
+    // When it already ends with the indentation we would emit, borrow it instead.
+    let ws = &line[..line.len() - rest.len()];
+    if let Some(tail) = ws
+        .len()
+        .checked_sub(tabs + spaces)
+        .map(|start| &ws[start..])
+    {
+        let (head, tail_spaces) = tail.split_at(tabs);
+        if head.bytes().all(|b| b == b'\t') && tail_spaces.bytes().all(|b| b == b' ') {
+            return Cow::from(&line[ws.len() - tail.len()..]);
+        }
+    }
+    Cow::from(format!("{}{}{rest}", "\t".repeat(tabs), " ".repeat(spaces)))
 }
 
 pub(crate) fn pascal2kebab(s: &'_ str) -> Cow<'_, str> {
@@ -384,10 +403,14 @@ mod tests {
 
     #[test]
     fn strip_indent() {
-        assert_eq!(super::strip_indent("      a", 4, 4), "  a");
-        assert_eq!(super::strip_indent("\t\ta", 4, 4), "\ta");
-        assert_eq!(super::strip_indent("a", 4, 4), "a");
-        assert_eq!(super::strip_indent("   ", 4, 4), "");
-        assert_eq!(super::strip_indent("\ta", 2, 4), "  a");
+        assert_eq!(super::strip_indent("      a", 4, 4, false), "  a");
+        assert_eq!(super::strip_indent("\t\ta", 4, 4, false), "    a");
+        assert_eq!(super::strip_indent("a", 4, 4, false), "a");
+        assert_eq!(super::strip_indent("   ", 4, 4, false), "");
+        assert_eq!(super::strip_indent("\ta", 2, 4, false), "  a");
+        assert_eq!(super::strip_indent("\t\ta", 4, 4, true), "\ta");
+        assert_eq!(super::strip_indent("        a", 4, 4, true), "\ta");
+        assert_eq!(super::strip_indent("\t\t  a", 4, 4, true), "\t  a");
+        assert_eq!(super::strip_indent("      a", 4, 4, true), "  a");
     }
 }

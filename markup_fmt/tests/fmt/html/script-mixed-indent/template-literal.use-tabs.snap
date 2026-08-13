@@ -1,0 +1,9 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<script>
+	const html = `
+	  <p>raw, keep this tab</p>
+    `;
+	after();
+</script>

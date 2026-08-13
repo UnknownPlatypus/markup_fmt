@@ -18,7 +18,7 @@ source: markup_fmt/tests/fmt.rs
 <div>
     <script>
         first();
-        		second();
+                second();
         third();
     </script>
 </div>

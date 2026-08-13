@@ -1,3 +1,8 @@
 [default]
 indentWidth = 4
 scriptIndent = true
+
+[use-tabs]
+indentWidth = 4
+scriptIndent = true
+useTabs = true

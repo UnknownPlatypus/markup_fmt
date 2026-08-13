@@ -35,6 +35,7 @@ where
         source: code,
         language,
         indent_width: options.layout.indent_width,
+        use_tabs: options.layout.use_tabs,
         print_width: options.layout.print_width,
         options: &options.language,
         external_formatter,

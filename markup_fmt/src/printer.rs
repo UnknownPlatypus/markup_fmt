@@ -752,16 +752,20 @@ impl<'s> DocGen<'s> for Element<'s> {
                             } else {
                                 ctx.format_script(text_node.raw, lang, text_node.start, &state)
                             };
-                            let doc = if matches!(
-                                ctx.options.script_formatter,
-                                Some(ScriptFormatter::Dprint)
-                            ) {
-                                Doc::hard_line().concat(reflow_owned(formatted.trim()))
-                            } else {
-                                Doc::hard_line().concat(dedent_and_reflow(
+                            let doc = match ctx.options.script_formatter {
+                                Some(ScriptFormatter::Dprint) => {
+                                    Doc::hard_line().concat(reflow_owned(formatted.trim()))
+                                }
+                                // Externally formatted output owns its indent style: dedent only.
+                                Some(ScriptFormatter::Biome) => Doc::hard_line()
+                                    .concat(reflow_with_indent(formatted.trim(), true)),
+                                None => Doc::hard_line().concat(dedent_and_reflow(
                                     formatted.trim(),
-                                    Some(ctx.indent_width),
-                                ))
+                                    Indentation::Normalize {
+                                        tab_width: ctx.indent_width,
+                                        use_tabs: ctx.use_tabs,
+                                    },
+                                )),
                             };
                             if is_script_indent {
                                 docs.push(doc.nest(ctx.indent_width));
@@ -2271,28 +2275,55 @@ fn reflow_owned<'i, 'o: 'i>(s: &'i str) -> impl Iterator<Item = Doc<'o>> + 'i {
     )
 }
 
+/// How the indentation of reflowed lines is handled.
+#[derive(Clone, Copy)]
+enum Indentation {
+    /// Keep lines as written.
+    Keep,
+    /// Drop the common indentation, one column per character. Fits formatter output.
+    Dedent,
+    /// Drop the common indentation (a tab counts `tab_width` columns) and rewrite
+    /// what remains with the target indent style. Fits raw, possibly mixed, source.
+    Normalize { tab_width: usize, use_tabs: bool },
+}
+
 fn reflow_with_indent<'i, 'o: 'i>(
     s: &'i str,
     detect_indent: bool,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
-    // Text coming from the formatter is space-indented, so tab width doesn't matter.
-    dedent_and_reflow(s, detect_indent.then_some(1))
+    dedent_and_reflow(
+        s,
+        if detect_indent {
+            Indentation::Dedent
+        } else {
+            Indentation::Keep
+        },
+    )
 }
 
-/// `tab_width` is the number of columns a tab stands for when comparing the
-/// indentation of lines, or `None` to leave indentation as is.
 fn dedent_and_reflow<'i, 'o: 'i>(
     s: &'i str,
-    tab_width: Option<usize>,
+    indentation: Indentation,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let (indent, tab_width) = tab_width.map_or((0, 0), |w| (helpers::detect_indent(s, w), w));
+    let indent = match indentation {
+        Indentation::Keep => 0,
+        Indentation::Dedent => helpers::detect_indent(s, 1),
+        Indentation::Normalize { tab_width, .. } => helpers::detect_indent(s, tab_width),
+    };
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
-        let trimmed = if s.starts_with([' ', '\t']) {
-            helpers::strip_indent(s, indent, tab_width)
-        } else {
-            Cow::from(s)
+        let trimmed = match indentation {
+            Indentation::Dedent if s.starts_with([' ', '\t']) => {
+                Cow::from(s.get(indent..).unwrap_or(s))
+            }
+            Indentation::Normalize {
+                tab_width,
+                use_tabs,
+            } if s.starts_with([' ', '\t']) => {
+                helpers::strip_indent(s, indent, tab_width, use_tabs)
+            }
+            _ => Cow::from(s),
         };
         let should_keep_raw = matches!(pair_stack.last(), Some('`'));
 
