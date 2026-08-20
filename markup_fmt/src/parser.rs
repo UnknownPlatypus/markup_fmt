@@ -1093,6 +1093,7 @@ impl<'s> Parser<'s> {
                             return Err(self.emit_error_with_pos(
                                 SyntaxErrorKind::ExpectCloseTag {
                                     tag_name: tag_name.into(),
+                                    pos: element_start,
                                     line,
                                     column,
                                 },
@@ -1106,6 +1107,7 @@ impl<'s> Parser<'s> {
                         let (line, column) = helpers::pos_to_line_col(self.source, element_start);
                         return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
                             tag_name: tag_name.into(),
+                            pos: element_start,
                             line,
                             column,
                         }));
@@ -1130,6 +1132,7 @@ impl<'s> Parser<'s> {
                     let (line, column) = helpers::pos_to_line_col(self.source, element_start);
                     return Err(self.emit_error(SyntaxErrorKind::ExpectCloseTag {
                         tag_name: tag_name.into(),
+                        pos: element_start,
                         line,
                         column,
                     }));
@@ -1296,6 +1299,7 @@ impl<'s> Parser<'s> {
                     let (line, column) = helpers::pos_to_line_col(self.source, tag_start);
                     return Err(self.emit_error(SyntaxErrorKind::ExpectJinjaBlockEnd {
                         tag_name: tag_name.into(),
+                        pos: tag_start,
                         line,
                         column,
                     }));
