@@ -23,6 +23,7 @@ pub enum SyntaxErrorKind {
     ExpectChar(char),
     ExpectCloseTag {
         tag_name: String,
+        pos: usize,
         line: usize,
         column: usize,
     },
@@ -33,6 +34,7 @@ pub enum SyntaxErrorKind {
     ExpectIdentifier,
     ExpectJinjaBlockEnd {
         tag_name: String,
+        pos: usize,
         line: usize,
         column: usize,
     },
@@ -78,6 +80,7 @@ impl fmt::Display for SyntaxErrorKind {
                 tag_name,
                 line,
                 column,
+                ..
             } => format!(
                 "expected close tag for opening tag <{tag_name}> from line {line}, column {column}"
             )
@@ -91,6 +94,7 @@ impl fmt::Display for SyntaxErrorKind {
                 tag_name,
                 line,
                 column,
+                ..
             } => format!(
                 "expected end tag for opening Jinja block {{% {tag_name} %}} from line {line}, column {column}"
             )
