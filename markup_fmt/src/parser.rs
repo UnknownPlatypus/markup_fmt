@@ -1491,6 +1491,7 @@ impl<'s> Parser<'s> {
                         body.push(JinjaTagOrChildren::Children(children));
                     }
                 }
+                let next_tag_start = self.peek_pos();
                 if let Ok(next_tag) = self.parse_jinja_tag() {
                     let next_tag_name = parse_jinja_tag_name(&next_tag);
                     if next_tag_name
@@ -1508,20 +1509,17 @@ impl<'s> Parser<'s> {
                             && next_tag_name == "plural"
                     {
                         body.push(JinjaTagOrChildren::Tag(next_tag));
-                    } else if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
-                        nodes.push(
-                            self.with_taken(|parser| {
-                                parser.parse_jinja_tag_or_block(Some(next_tag), children_parser)
-                            })
-                            .map(|(kind, raw)| T::build(kind, raw))?,
-                        );
                     } else {
-                        body.push(JinjaTagOrChildren::Children(vec![
-                            self.with_taken(|parser| {
-                                parser.parse_jinja_tag_or_block(Some(next_tag), children_parser)
-                            })
-                            .map(|(kind, raw)| T::build(kind, raw))?,
-                        ]));
+                        let kind =
+                            self.parse_jinja_tag_or_block(Some(next_tag), children_parser)?;
+                        let node = T::build(kind, unsafe {
+                            self.source.get_unchecked(next_tag_start..self.peek_pos())
+                        });
+                        if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
+                            nodes.push(node);
+                        } else {
+                            body.push(JinjaTagOrChildren::Children(vec![node]));
+                        }
                     }
                 } else {
                     break;

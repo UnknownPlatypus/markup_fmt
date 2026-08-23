@@ -70,3 +70,10 @@ function generateHtml(data: unknown) {
     <!-- ... -->
   {/if}
 </div>
+
+{@const something: [][] = []}
+{#if true}
+  {@const something = true
+    ? 1
+    : 2}
+{/if}
