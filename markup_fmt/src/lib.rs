@@ -292,4 +292,24 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn unclosed_django_comment_is_rejected() {
+        for input in ["{%comment%}", "{% comment %}\n", "<p>{% comment %}hi"] {
+            let err = format_text(input, Language::Django, &Default::default(), |code, _| {
+                Ok(Cow::from(code))
+            })
+            .unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    FormatError::Syntax(SyntaxError {
+                        kind: SyntaxErrorKind::ExpectJinjaBlockEnd { .. },
+                        ..
+                    })
+                ),
+                "expected a missing `endcomment` error for {input:?}, got {err}"
+            );
+        }
+    }
 }

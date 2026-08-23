@@ -1337,7 +1337,11 @@ impl<'s> Parser<'s> {
     }
 
     /// Reads a Django raw block body, ending at `{% end<end_tail> %}`.
-    fn parse_django_raw_block_content(&mut self, end_tail: &str) -> PResult<&'s str> {
+    fn parse_django_raw_block_content(
+        &mut self,
+        end_tail: &str,
+        tag_start: usize,
+    ) -> PResult<&'s str> {
         let start = self
             .chars
             .peek()
@@ -1368,8 +1372,16 @@ impl<'s> Parser<'s> {
                 Some(..) => {
                     self.chars.next();
                 }
+                // Taking the rest of the source as the raw body would make it swallow
+                // the printed trailing newline, growing the output on every pass.
                 None => {
-                    return Ok(unsafe { self.source.get_unchecked(start..self.source.len()) });
+                    let (line, column) = helpers::pos_to_line_col(self.source, tag_start);
+                    return Err(self.emit_error(SyntaxErrorKind::ExpectJinjaBlockEnd {
+                        tag_name: end_tail.into(),
+                        pos: tag_start,
+                        line,
+                        column,
+                    }));
                 }
             }
         }
@@ -1456,10 +1468,11 @@ impl<'s> Parser<'s> {
             } else {
                 tag_name
             };
+            let tag_start = first_tag.start;
             let mut body = Vec::with_capacity(3);
             body.push(JinjaTagOrChildren::Tag(first_tag));
 
-            let raw_content = self.parse_django_raw_block_content(end_tail)?;
+            let raw_content = self.parse_django_raw_block_content(end_tail, tag_start)?;
             if !raw_content.is_empty() {
                 body.push(JinjaTagOrChildren::Children(vec![T::build(
                     T::from_raw_text(raw_content),
