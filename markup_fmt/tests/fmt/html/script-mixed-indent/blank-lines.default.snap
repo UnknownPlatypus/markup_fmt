@@ -1,0 +1,23 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<script>
+    first();
+
+    second();
+</script>
+
+<div>
+    <script>
+        const html = `
+  
+            <p>keep</p>
+        `;
+    </script>
+</div>
+
+<script>
+    const s = `a${
+
+    1}b`;
+</script>

@@ -2301,6 +2301,7 @@ fn dedent_and_reflow<'i, 'o: 'i>(
     tab_width: Option<usize>,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
     let (indent, tab_width) = tab_width.map_or((0, 0), |w| (helpers::detect_indent(s, w), w));
+    let last_line = s.matches('\n').count();
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
         let s = s.strip_suffix('\r').unwrap_or(s);
@@ -2350,16 +2351,23 @@ fn dedent_and_reflow<'i, 'o: 'i>(
             }
         }
 
+        // `detect_indent` skips blank lines, so their leftover indent shrinks on the next pass.
+        // Drop it: it is trailing whitespace, except on the last line where content may follow.
+        let is_blank_line = trimmed.trim().is_empty();
+        let drop_leftover_indent = is_blank_line && i != last_line;
+
         [
             if i == 0 {
                 Doc::nil()
-            } else if trimmed.trim().is_empty() || should_keep_raw {
+            } else if is_blank_line || should_keep_raw {
                 Doc::empty_line()
             } else {
                 Doc::hard_line()
             },
             if should_keep_raw {
                 Doc::text(s.to_owned())
+            } else if drop_leftover_indent {
+                Doc::nil()
             } else {
                 Doc::text(trimmed.into_owned())
             },
