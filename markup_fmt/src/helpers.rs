@@ -390,31 +390,44 @@ pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn starts_with_directive() {
-        for comment in [
+    use rstest::rstest;
+
+    #[rstest]
+    fn matching_directive(
+        #[values(
             "markup-fmt:ignore",
-            " markup-fmt:ignore ",
-            "markup-fmt : ignore",
-            "markup-fmt:\tignore\nrest",
-        ] {
-            assert!(
-                super::starts_with_directive(comment, "markup-fmt:ignore"),
-                "{comment}"
-            );
-        }
-        for comment in [
-            "markup-fmt:ignore-file",
-            "markup-fmt:ignor",
-            "markup-fmt ignore",
-            "x markup-fmt:ignore",
+            "markup-fmt: ignore",
+            "markup-fmt :ignore",
+            "markup-fmt \t:\t ignore",
+            "  markup-fmt:ignore",
+            "\n markup-fmt:ignore",
+            "markup-fmt:ignore ",
+            "markup-fmt:ignore\nmore text",
+            "markup-fmt:ignore why not"
+        )]
+        comment: &str,
+    ) {
+        assert!(super::starts_with_directive(comment, "markup-fmt:ignore"));
+    }
+
+    #[rstest]
+    fn non_matching_directive(
+        #[values(
             "",
-        ] {
-            assert!(
-                !super::starts_with_directive(comment, "markup-fmt:ignore"),
-                "{comment}"
-            );
-        }
+            "markup-fmt",
+            "markup-fmt:",
+            "markup-fmt:ignor",
+            "markup-fmt:ignore-file",
+            "markup-fmt::ignore",
+            "markup-fmt ignore",
+            "MARKUP-FMT:IGNORE",
+            ":ignore",
+            "prefix markup-fmt:ignore",
+            "markup-fmt:i gnore"
+        )]
+        comment: &str,
+    ) {
+        assert!(!super::starts_with_directive(comment, "markup-fmt:ignore"));
     }
 
     #[test]
