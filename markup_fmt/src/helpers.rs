@@ -362,8 +362,61 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
     }
 }
 
+/// Whether a comment's content starts with `directive`, implementing `\s*part(\s*:\s*part)*(\s|$)`,
+/// so `markup-fmt : ignore` is recognized just like `markup-fmt:ignore`.
+pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
+    let mut parts = directive.split(':');
+    let Some(mut rest) = parts.next().and_then(|first| {
+        comment
+            .trim_ascii_start()
+            .as_bytes()
+            .strip_prefix(first.as_bytes())
+    }) else {
+        return false;
+    };
+    for part in parts {
+        let Some(next) = rest
+            .trim_ascii_start()
+            .strip_prefix(b":")
+            .map(<[u8]>::trim_ascii_start)
+            .and_then(|rest| rest.strip_prefix(part.as_bytes()))
+        else {
+            return false;
+        };
+        rest = next;
+    }
+    rest.first().is_none_or(u8::is_ascii_whitespace)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn starts_with_directive() {
+        for comment in [
+            "markup-fmt:ignore",
+            " markup-fmt:ignore ",
+            "markup-fmt : ignore",
+            "markup-fmt:\tignore\nrest",
+        ] {
+            assert!(
+                super::starts_with_directive(comment, "markup-fmt:ignore"),
+                "{comment}"
+            );
+        }
+        for comment in [
+            "markup-fmt:ignore-file",
+            "markup-fmt:ignor",
+            "markup-fmt ignore",
+            "x markup-fmt:ignore",
+            "",
+        ] {
+            assert!(
+                !super::starts_with_directive(comment, "markup-fmt:ignore"),
+                "{comment}"
+            );
+        }
+    }
+
     #[test]
     fn pos_to_line_col() {
         let source = "abc\ndef\nghi";

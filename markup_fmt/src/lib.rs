@@ -11,7 +11,9 @@ mod printer;
 mod state;
 
 use crate::{config::FormatOptions, ctx::Ctx, parser::Parser, printer::DocGen, state::State};
-pub use crate::{ctx::Hints, debug::debug_doc_tree, error::*, parser::Language};
+pub use crate::{
+    ctx::Hints, debug::debug_doc_tree, error::*, helpers::starts_with_directive, parser::Language,
+};
 use anyhow::Error;
 use std::{borrow::Cow, path::Path};
 use tiny_pretty::{IndentKind, PrintOptions};
@@ -72,16 +74,11 @@ where
             ..
         } = child
         {
-            let trimmed = raw.trim_start();
             options
                 .language
                 .ignore_file_comment_directive
                 .iter()
-                .any(|directive| {
-                    trimmed.strip_prefix(directive).is_some_and(|rest| {
-                        rest.starts_with(|c: char| c.is_ascii_whitespace()) || rest.is_empty()
-                    })
-                })
+                .any(|directive| starts_with_directive(raw, directive))
         } else {
             false
         }

@@ -2453,12 +2453,10 @@ fn has_ignore_directive<'s, F>(raw: &str, ctx: &Ctx<'s, F>) -> bool
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
-    let trimmed = raw.trim_start();
-    ctx.options.ignore_comment_directive.iter().any(|directive| {
-        trimmed.strip_prefix(directive).is_some_and(|rest| {
-            rest.starts_with(|c: char| c.is_ascii_whitespace()) || rest.is_empty()
-        })
-    })
+    ctx.options
+        .ignore_comment_directive
+        .iter()
+        .any(|directive| helpers::starts_with_directive(raw, directive))
 }
 
 fn should_add_whitespace_before_text_node<'s>(
