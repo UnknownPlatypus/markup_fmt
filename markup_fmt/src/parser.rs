@@ -136,6 +136,21 @@ impl<'s> Parser<'s> {
         Ok((parsed, unsafe { self.source.get_unchecked(start..end) }))
     }
 
+    /// Django has no whitespace control: `{%- foo -%}` is a template syntax error
+    fn reject_django_whitespace_control(&self, content: &str, start: usize) -> PResult<()> {
+        if !matches!(self.language, Language::Django) {
+            return Ok(());
+        }
+        // A leading marker glued to a number is a signed literal: `{{-1}}` is valid Django.
+        let leading = content
+            .strip_prefix(['-', '+'])
+            .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_digit() || c == '.'));
+        if leading || content.ends_with(['-', '+']) {
+            return Err(self.emit_error_with_pos(SyntaxErrorKind::DjangoWhitespaceControl, start));
+        }
+        Ok(())
+    }
+
     fn parse_angular_control_flow_children(&mut self) -> PResult<Vec<Node<'s>>> {
         if self.chars.next_if(|(_, c)| *c == '{').is_none() {
             return Err(self.emit_error(SyntaxErrorKind::ExpectChar('{')));
@@ -1399,10 +1414,9 @@ impl<'s> Parser<'s> {
             }
         }
 
-        Ok(JinjaTag {
-            content: unsafe { self.source.get_unchecked(start..end) },
-            start,
-        })
+        let content = unsafe { self.source.get_unchecked(start..end) };
+        self.reject_django_whitespace_control(content, start)?;
+        Ok(JinjaTag { content, start })
     }
 
     fn parse_jinja_tag_or_block<T, F>(
@@ -1433,8 +1447,9 @@ impl<'s> Parser<'s> {
                 )]));
             }
 
-            if let Ok(end_tag) = self.parse_jinja_tag() {
-                body.push(JinjaTagOrChildren::Tag(end_tag));
+            // An unclosed `{% comment %}` runs to EOF and keeps no end tag.
+            if self.chars.peek().is_some() {
+                body.push(JinjaTagOrChildren::Tag(self.parse_jinja_tag()?));
             }
 
             Ok(T::from_block(JinjaBlock { body }))
@@ -1494,38 +1509,35 @@ impl<'s> Parser<'s> {
                         body.push(JinjaTagOrChildren::Children(children));
                     }
                 }
+                // Children only stop on `{%`, so a tag is guaranteed to be there.
                 let next_tag_start = self.peek_pos();
-                if let Ok(next_tag) = self.parse_jinja_tag() {
-                    let next_tag_name = parse_jinja_tag_name(&next_tag);
-                    if next_tag_name
-                        .strip_prefix("end")
-                        .is_some_and(|name| name == tag_name)
-                    {
-                        body.push(JinjaTagOrChildren::Tag(next_tag));
-                        break;
-                    }
-                    if tag_name == "if" && matches!(next_tag_name, "elif" | "elseif" | "else")
-                        || tag_name == "for" && matches!(next_tag_name, "else" | "empty")
-                        || matches!(tag_name, "ifchanged" | "ifequal" | "ifnotequal")
-                            && next_tag_name == "else"
-                        || matches!(tag_name, "blocktrans" | "blocktranslate")
-                            && next_tag_name == "plural"
-                    {
-                        body.push(JinjaTagOrChildren::Tag(next_tag));
-                    } else {
-                        let kind =
-                            self.parse_jinja_tag_or_block(Some(next_tag), children_parser)?;
-                        let node = T::build(kind, unsafe {
-                            self.source.get_unchecked(next_tag_start..self.peek_pos())
-                        });
-                        if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
-                            nodes.push(node);
-                        } else {
-                            body.push(JinjaTagOrChildren::Children(vec![node]));
-                        }
-                    }
-                } else {
+                let next_tag = self.parse_jinja_tag()?;
+                let next_tag_name = parse_jinja_tag_name(&next_tag);
+                if next_tag_name
+                    .strip_prefix("end")
+                    .is_some_and(|name| name == tag_name)
+                {
+                    body.push(JinjaTagOrChildren::Tag(next_tag));
                     break;
+                }
+                if tag_name == "if" && matches!(next_tag_name, "elif" | "elseif" | "else")
+                    || tag_name == "for" && matches!(next_tag_name, "else" | "empty")
+                    || matches!(tag_name, "ifchanged" | "ifequal" | "ifnotequal")
+                        && next_tag_name == "else"
+                    || matches!(tag_name, "blocktrans" | "blocktranslate")
+                        && next_tag_name == "plural"
+                {
+                    body.push(JinjaTagOrChildren::Tag(next_tag));
+                } else {
+                    let kind = self.parse_jinja_tag_or_block(Some(next_tag), children_parser)?;
+                    let node = T::build(kind, unsafe {
+                        self.source.get_unchecked(next_tag_start..self.peek_pos())
+                    });
+                    if let Some(JinjaTagOrChildren::Children(nodes)) = body.last_mut() {
+                        nodes.push(node);
+                    } else {
+                        body.push(JinjaTagOrChildren::Children(vec![node]));
+                    }
                 }
             }
             Ok(T::from_block(JinjaBlock { body }))
@@ -1655,6 +1667,7 @@ impl<'s> Parser<'s> {
         }
         let (raw, start) = self.parse_svelte_or_astro_expr()?;
         self.chars.next_if(|(_, c)| *c == '}');
+        self.reject_django_whitespace_control(raw, start)?;
 
         Ok((raw, start))
     }
@@ -1737,7 +1750,7 @@ impl<'s> Parser<'s> {
                                 Language::Vue => {
                                     NodeKind::VueInterpolation(VueInterpolation { expr, start })
                                 }
-                                Language::Jinja | Language::Django => {
+                                Language::Jinja => {
                                     let (trim_prev, expr) =
                                         if let Some(rest) = expr.strip_prefix('-') {
                                             (true, rest)
@@ -1755,6 +1768,16 @@ impl<'s> Parser<'s> {
                                         start: if trim_prev { start + 1 } else { start },
                                         trim_prev,
                                         trim_next,
+                                    })
+                                }
+                                // Django has no whitespace control, so a leading `-` is
+                                // part of the expression: `{{-1}}` is negative one.
+                                Language::Django => {
+                                    NodeKind::JinjaInterpolation(JinjaInterpolation {
+                                        expr,
+                                        start,
+                                        trim_prev: false,
+                                        trim_next: false,
                                     })
                                 }
                                 _ => unreachable!(),

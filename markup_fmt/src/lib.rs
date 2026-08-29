@@ -238,4 +238,30 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn django_whitespace_control_is_rejected() {
+        for input in [
+            "{% for item in seq -%}{{ item }}{% endfor %}",
+            "{%+ if bar %}yes{% endif %}",
+            "{{- foo }}",
+            "{{ foo -}}",
+            "{% comment %}x{%- endcomment %}",
+        ] {
+            let err = format_text(input, Language::Django, &Default::default(), |code, _| {
+                Ok(Cow::from(code))
+            })
+            .unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    FormatError::Syntax(SyntaxError {
+                        kind: SyntaxErrorKind::DjangoWhitespaceControl,
+                        ..
+                    })
+                ),
+                "expected a whitespace control error for {input:?}, got {err}"
+            );
+        }
+    }
 }

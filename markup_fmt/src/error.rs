@@ -12,6 +12,7 @@ pub struct SyntaxError {
 
 #[derive(Clone, Debug)]
 pub enum SyntaxErrorKind {
+    DjangoWhitespaceControl,
     ExpectAngularBlock(&'static str),
     ExpectAngularLet,
     ExpectAngularSwitch,
@@ -65,6 +66,9 @@ pub enum SyntaxErrorKind {
 impl fmt::Display for SyntaxErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let reason: Cow<_> = match self {
+            SyntaxErrorKind::DjangoWhitespaceControl => {
+                "Django does not support `-`/`+` whitespace control".into()
+            }
             SyntaxErrorKind::ExpectAngularBlock(keyword) => {
                 format!("expected Angular `@{keyword}` block").into()
             }
