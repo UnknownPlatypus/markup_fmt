@@ -1,0 +1,3 @@
+[dprint]
+script_formatter = "dprint"
+script_indent = true
