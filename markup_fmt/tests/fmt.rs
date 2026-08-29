@@ -1,13 +1,19 @@
 use insta::{Settings, assert_snapshot, glob};
-use markup_fmt::{Language, config::FormatOptions, detect_language, format_text};
-use std::{collections::HashMap, fs, path::Path};
+use markup_fmt::{
+    Hints, Language,
+    config::{FormatOptions, ScriptFormatter},
+    detect_language, format_text,
+};
+use std::{borrow::Cow, collections::HashMap, fs, path::Path};
 
 #[test]
 fn fmt_snapshot() {
     let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,hbs,xml}";
     glob!(pattern, |path| {
         let input = fs::read_to_string(path).unwrap();
-        let language = if path.to_str().unwrap().contains("django") {
+        // Match the `django` fixture dir as a path component, not a substring,
+        // so a checkout path containing "django" doesn't hijack every fixture.
+        let language = if path.components().any(|c| c.as_os_str() == "django") {
             Language::Django
         } else {
             detect_language(path).unwrap()
@@ -43,17 +49,21 @@ fn run_format_test(
     options: &FormatOptions,
     language: Language,
 ) -> String {
-    let output = format_text(input, language, options, |code, _| Ok(code.into()))
-        .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
-        .unwrap();
-    let regression_format = format_text(&output, language, options, |code, _| Ok(code.into()))
-        .map_err(|err| {
-            format!(
-                "syntax error in stability test '{}': {err:?}",
-                path.display(),
-            )
-        })
-        .unwrap();
+    let output = format_text(input, language, options, |code, hints| {
+        Ok(mock_external_formatter(code, &hints, options))
+    })
+    .map_err(|err| format!("failed to format '{}': {:?}", path.display(), err))
+    .unwrap();
+    let regression_format = format_text(&output, language, options, |code, hints| {
+        Ok(mock_external_formatter(code, &hints, options))
+    })
+    .map_err(|err| {
+        format!(
+            "syntax error in stability test '{}': {err:?}",
+            path.display(),
+        )
+    })
+    .unwrap();
     similar_asserts::assert_eq!(
         output,
         regression_format,
@@ -62,6 +72,42 @@ fn run_format_test(
     );
 
     output
+}
+
+/// Emulate dprint's `file_indent_level` handling when a fixture opts into
+/// `script_formatter = "dprint"`: dedent the script, then indent every line
+/// to `hints.indent_level`. Other fixtures keep the identity formatter.
+fn mock_external_formatter<'a>(
+    code: &'a str,
+    hints: &Hints,
+    options: &FormatOptions,
+) -> Cow<'a, str> {
+    if !matches!(
+        options.language.script_formatter,
+        Some(ScriptFormatter::Dprint)
+    ) || !matches!(hints.ext, "js" | "mjs" | "jsx" | "ts" | "mts" | "tsx")
+    {
+        return code.into();
+    }
+    let base = " ".repeat(usize::from(hints.indent_level) * options.layout.indent_width);
+    let dedent = code
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    code.lines()
+        .map(|line| {
+            let line = line.trim_end();
+            if line.is_empty() {
+                String::new()
+            } else {
+                format!("{base}{}", &line[dedent..])
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .into()
 }
 
 fn build_settings(path: &Path) -> Settings {
