@@ -7,7 +7,9 @@ fn fmt_snapshot() {
     let pattern = "fmt/**/*.{html,vue,svelte,astro,jinja,njk,vto,mustache,hbs,xml}";
     glob!(pattern, |path| {
         let input = fs::read_to_string(path).unwrap();
-        let language = if path.to_str().unwrap().contains("django") {
+        // Match the `django` fixture dir as a path component, not a substring,
+        // so a checkout path containing "django" doesn't hijack every fixture.
+        let language = if path.components().any(|c| c.as_os_str() == "django") {
             Language::Django
         } else {
             detect_language(path).unwrap()
