@@ -1411,7 +1411,7 @@ impl<'s> Parser<'s> {
         };
         let start = start + 1;
 
-        let mut end = start;
+        let end;
         loop {
             match self.chars.next() {
                 Some((i, '%')) => {
@@ -1421,7 +1421,8 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some(..) => continue,
-                None => break,
+                // Recovering here would leave the tag content empty, silently deleting it.
+                None => return Err(self.emit_error(SyntaxErrorKind::ExpectChar('}'))),
             }
         }
 

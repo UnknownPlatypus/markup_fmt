@@ -264,4 +264,32 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn unterminated_jinja_tag_is_rejected() {
+        for language in [Language::Jinja, Language::Django] {
+            // Pre-fix, all of these formatted with the tag content replaced by `{%  %}`.
+            for input in [
+                "{%",
+                "{% if x",
+                "{% cycle 'a' 'b'",
+                "{% if x %}body{% endif %}{% cycle 'a'",
+            ] {
+                let err = format_text(input, language, &Default::default(), |code, _| {
+                    Ok(Cow::from(code))
+                })
+                .unwrap_err();
+                assert!(
+                    matches!(
+                        err,
+                        FormatError::Syntax(SyntaxError {
+                            kind: SyntaxErrorKind::ExpectChar('}'),
+                            ..
+                        })
+                    ),
+                    "expected a missing `%}}` error for {input:?} in {language:?}, got {err}"
+                );
+            }
+        }
+    }
 }
