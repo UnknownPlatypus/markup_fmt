@@ -2516,6 +2516,52 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// Consume a block standing in for a tag name,
+    /// e.g. `<{% if field.id_for_label %}div{% else %}fieldset{% endif %}>`.
+    /// Only `if`/`elif`/`else` branches qualify, matching real-world usage.
+    fn try_consume_if_block_in_tag_name(&mut self) -> PResult<bool> {
+        let chars = self.chars.clone();
+
+        let mut has_name = false;
+        let mut closed = false;
+        if parse_jinja_tag_name(&self.parse_jinja_tag()?) == "if" {
+            while !closed {
+                while self
+                    .chars
+                    .next_if(|(_, c)| is_html_tag_name_char(*c))
+                    .is_some()
+                {
+                    has_name = true;
+                }
+
+                let mut lookahead = self.chars.clone();
+                match (lookahead.next(), lookahead.next()) {
+                    (Some((_, '{')), Some((_, '%'))) => {
+                        match parse_jinja_tag_name(&self.parse_jinja_tag()?) {
+                            "endif" => closed = true,
+                            "elif" | "else" => {}
+                            // A nested block can't be part of a tag name.
+                            _ => break,
+                        }
+                    }
+                    (Some((_, '{')), Some((_, '{'))) => {
+                        self.parse_mustache_interpolation()?;
+                        has_name = true;
+                    }
+                    // Anything else isn't part of a tag name, so it must be attributes.
+                    _ => break,
+                }
+            }
+        }
+
+        if closed && has_name {
+            Ok(true)
+        } else {
+            self.chars = chars;
+            Ok(false)
+        }
+    }
+
     fn parse_tag_name(&mut self) -> PResult<&'s str> {
         let (start, mut end) = match self.chars.peek() {
             Some((i, c)) if is_html_tag_name_char(*c) => {
@@ -2541,11 +2587,18 @@ impl<'s> Parser<'s> {
             } else if *c == '{' && matches!(self.language, Language::Jinja | Language::Django) {
                 let mut chars = self.chars.clone();
                 chars.next();
-                if chars.next_if(|(_, c)| *c == '{').is_some() {
-                    self.parse_mustache_interpolation()?;
-                    end = self.peek_pos();
-                } else {
-                    break;
+                match chars.peek() {
+                    Some((_, '{')) => {
+                        self.parse_mustache_interpolation()?;
+                        end = self.peek_pos();
+                    }
+                    Some((_, '%')) => {
+                        if !self.try_consume_if_block_in_tag_name()? {
+                            break;
+                        }
+                        end = self.peek_pos();
+                    }
+                    _ => break,
                 }
             } else {
                 break;
