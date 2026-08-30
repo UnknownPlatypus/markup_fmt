@@ -1,0 +1,28 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<{% if field.id_for_label %}div{% else %}fieldset{% endif %}
+  class="field-wrapper ds-relative ds-flex ds-items-start ds-my-16 {{ wrapper_class }}"
+  {% if id %}id="{{ id }}"{% endif %}
+>
+  <label>{{ field.label }}</label>
+</{% if field.id_for_label %}div{% else %}fieldset{% endif %}>
+
+<h{% if big %}1{% else %}2{% endif %}>partial tag
+  name</h{% if big %}1{% else %}2{% endif %}>
+
+<{% if tag %}{{ tag }}{% else %}div{% endif %}>interpolated
+  branch</{% if tag %}{{ tag }}{% else %}div{% endif %}>
+
+<{% if a %}p{% elif b %}div{% else %}span{% endif %}>elif
+  branches</{% if a %}p{% elif b %}div{% else %}span{% endif %}>
+
+<a {% if href %}href="{{ href }}"{% endif %}>attributes, not a tag name</a>
+<a {% if x %}{% endif %} href="y">empty block, not a tag name</a>
+
+<{% if badge_url %}a{% else %}div{% endif %}
+  href="{{ badge_url }}"
+  class="absolute border-2 border-base-100 block top-0 right-0"
+>
+  {{ badge_count }}
+</{% if badge_url %}a{% else %}div{% endif %}>
