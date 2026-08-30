@@ -17,3 +17,7 @@ source: markup_fmt/tests/fmt.rs
 {% endverbatim %}
 
 {% verbatim outer %}{% endverbatim %}{% endverbatim outer %}
+
+{% verbatim %}
+{% endverbatimx %} and {% endverbatim x %} stay raw
+{% endverbatim %}

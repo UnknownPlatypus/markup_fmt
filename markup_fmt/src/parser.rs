@@ -1362,7 +1362,12 @@ impl<'s> Parser<'s> {
                             .trim_start_matches(['+', '-'])
                             .trim_start()
                             .strip_prefix("end")
-                            .is_some_and(|rest| rest.starts_with(end_tail))
+                            .and_then(|rest| rest.strip_prefix(end_tail))
+                            .is_some_and(|rest| {
+                                rest.trim_start()
+                                    .trim_start_matches(['+', '-'])
+                                    .starts_with("%}")
+                            })
                         {
                             return Ok(unsafe { self.source.get_unchecked(start..i) });
                         }
@@ -1480,10 +1485,7 @@ impl<'s> Parser<'s> {
                 )]));
             }
 
-            // An unclosed block runs to EOF and keeps no end tag.
-            if self.chars.peek().is_some() {
-                body.push(JinjaTagOrChildren::Tag(self.parse_jinja_tag()?));
-            }
+            body.push(JinjaTagOrChildren::Tag(self.parse_jinja_tag()?));
 
             Ok(T::from_block(JinjaBlock { body }))
         } else if !matches!(self.language, Language::Django)

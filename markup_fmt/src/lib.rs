@@ -301,6 +301,8 @@ mod tests {
             "<p>{% comment %}hi",
             "{% verbatim %}",
             "{% verbatim x %}raw",
+            "{% comment %}x{% endcommentary %}",
+            "{% verbatim %}x{% endverbatim y %}",
         ] {
             let err = format_text(input, Language::Django, &Default::default(), |code, _| {
                 Ok(Cow::from(code))
