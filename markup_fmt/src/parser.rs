@@ -1327,7 +1327,8 @@ impl<'s> Parser<'s> {
         Ok(children)
     }
 
-    fn parse_django_comment_content(&mut self) -> PResult<&'s str> {
+    /// Reads a Django raw block body, ending at `{% end<end_tail> %}`.
+    fn parse_django_raw_block_content(&mut self, end_tail: &str) -> PResult<&'s str> {
         let start = self
             .chars
             .peek()
@@ -1347,7 +1348,8 @@ impl<'s> Parser<'s> {
                             .trim_start_matches('%')
                             .trim_start_matches(['+', '-'])
                             .trim_start()
-                            .starts_with("endcomment")
+                            .strip_prefix("end")
+                            .is_some_and(|rest| rest.starts_with(end_tail))
                         {
                             return Ok(unsafe { self.source.get_unchecked(start..i) });
                         }
@@ -1435,11 +1437,19 @@ impl<'s> Parser<'s> {
         };
         let tag_name = parse_jinja_tag_name(&first_tag);
 
-        if matches!(self.language, Language::Django) && matches!(tag_name, "comment") {
+        // Django's lexer emits `{% comment %}` and `{% verbatim %}` bodies as plain text,
+        // so nothing inside them is parsed.
+        if matches!(self.language, Language::Django) && matches!(tag_name, "comment" | "verbatim") {
+            // `{% verbatim x %}` is closed by `{% endverbatim x %}`, name included.
+            let end_tail = if tag_name == "verbatim" {
+                first_tag.content.trim()
+            } else {
+                tag_name
+            };
             let mut body = Vec::with_capacity(3);
             body.push(JinjaTagOrChildren::Tag(first_tag));
 
-            let raw_content = self.parse_django_comment_content()?;
+            let raw_content = self.parse_django_raw_block_content(end_tail)?;
             if !raw_content.is_empty() {
                 body.push(JinjaTagOrChildren::Children(vec![T::build(
                     T::from_raw_text(raw_content),
@@ -1447,7 +1457,7 @@ impl<'s> Parser<'s> {
                 )]));
             }
 
-            // An unclosed `{% comment %}` runs to EOF and keeps no end tag.
+            // An unclosed block runs to EOF and keeps no end tag.
             if self.chars.peek().is_some() {
                 body.push(JinjaTagOrChildren::Tag(self.parse_jinja_tag()?));
             }
@@ -1491,7 +1501,6 @@ impl<'s> Parser<'s> {
                         | "partialdef"
                         | "spaceless"
                         | "timezone"
-                        | "verbatim"
                         | "with"
                 ))
             || self.custom_blocks.iter().any(|s| s == tag_name)

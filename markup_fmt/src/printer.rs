@@ -982,7 +982,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
             .body
             .first()
             .is_some_and(|first| {
-                matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment"))
+                matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment" | "verbatim"))
             });
 
         Doc::list(

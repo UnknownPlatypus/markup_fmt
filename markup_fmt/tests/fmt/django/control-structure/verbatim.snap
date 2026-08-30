@@ -10,3 +10,10 @@ source: markup_fmt/tests/fmt.rs
 {% verbatim myblock %}
     {{ if dying }}Still alive.{{ endif }}
 {% endverbatim myblock %}
+
+{% verbatim %}
+    {%- if jinja -%}{{- x -}}{%- endif -%}
+    <p    class="untouched">unbalanced
+{% endverbatim %}
+
+{% verbatim outer %}{% endverbatim %}{% endverbatim outer %}
