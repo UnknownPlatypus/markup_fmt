@@ -294,8 +294,14 @@ mod tests {
     }
 
     #[test]
-    fn unclosed_django_comment_is_rejected() {
-        for input in ["{%comment%}", "{% comment %}\n", "<p>{% comment %}hi"] {
+    fn unclosed_django_raw_block_is_rejected() {
+        for input in [
+            "{%comment%}",
+            "{% comment %}\n",
+            "<p>{% comment %}hi",
+            "{% verbatim %}",
+            "{% verbatim x %}raw",
+        ] {
             let err = format_text(input, Language::Django, &Default::default(), |code, _| {
                 Ok(Cow::from(code))
             })
@@ -308,7 +314,7 @@ mod tests {
                         ..
                     })
                 ),
-                "expected a missing `endcomment` error for {input:?}, got {err}"
+                "expected a missing end tag error for {input:?}, got {err}"
             );
         }
     }
