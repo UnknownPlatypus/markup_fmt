@@ -835,17 +835,22 @@ impl<'s> Parser<'s> {
             let mut chars_stack = vec![];
             loop {
                 match self.chars.next() {
-                    Some((i, c)) if c == quote => {
-                        if chars_stack.is_empty() || !can_interpolate {
-                            end = i;
-                            break;
-                        } else if chars_stack.last().is_some_and(|last| *last == c) {
+                    Some((i, c)) if c == quote && chars_stack.is_empty() => {
+                        end = i;
+                        break;
+                    }
+                    // Both quotes delimit strings inside an interpolation, so an apostrophe
+                    // in a double-quoted argument can't end a single-quoted attribute.
+                    Some((_, c @ ('"' | '\''))) if !chars_stack.is_empty() => {
+                        if chars_stack.last().is_some_and(|last| *last == c) {
                             chars_stack.pop();
-                        } else {
+                        } else if chars_stack.last().is_some_and(|last| *last == '{') {
                             chars_stack.push(c);
                         }
                     }
-                    Some((_, '{')) if can_interpolate => {
+                    Some((_, '{'))
+                        if can_interpolate && !matches!(chars_stack.last(), Some('"' | '\'')) =>
+                    {
                         // Outside Svelte, a lone `{` is literal text, so only `{{`, `{%` and `{#` open an interpolation.
                         if matches!(self.language, Language::Svelte)
                             || self
