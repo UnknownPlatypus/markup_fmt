@@ -2300,7 +2300,16 @@ fn dedent_and_reflow<'i, 'o: 'i>(
     s: &'i str,
     tab_width: Option<usize>,
 ) -> impl Iterator<Item = Doc<'o>> + 'i {
-    let (indent, tab_width) = tab_width.map_or((0, 0), |w| (helpers::detect_indent(s, w), w));
+    let (indent, tab_width) = tab_width.map_or((0, 0), |w| {
+        // Continuation lines are emitted verbatim below, so their indent must not count.
+        // The scan runs before `skip` so a literal opened on line 0 is still tracked.
+        let mut prescan_stack = vec![];
+        let code_lines = s
+            .lines()
+            .filter(move |line| !scan_js_line(&mut prescan_stack, line))
+            .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 });
+        (helpers::detect_indent(code_lines, w), w)
+    });
     let last_line = s.matches('\n').count();
     let mut pair_stack = vec![];
     s.split('\n').enumerate().flat_map(move |(i, s)| {
@@ -2310,46 +2319,7 @@ fn dedent_and_reflow<'i, 'o: 'i>(
         } else {
             Cow::from(s)
         };
-        let should_keep_raw = matches!(pair_stack.last(), Some('`'));
-
-        let mut chars = s.chars().peekable();
-        while let Some(c) = chars.next() {
-            match c {
-                '`' | '\'' | '"' => {
-                    let last = pair_stack.last();
-                    if last.is_some_and(|last| *last == c) {
-                        pair_stack.pop();
-                    } else if matches!(last, Some('$' | '{') | None) {
-                        pair_stack.push(c);
-                    }
-                }
-                '$' if matches!(pair_stack.last(), Some('`'))
-                    && chars.next_if(|next| *next == '{').is_some() =>
-                {
-                    pair_stack.push('$');
-                }
-                '{' if !matches!(pair_stack.last(), Some('`' | '\'' | '"' | '/')) => {
-                    pair_stack.push('{');
-                }
-                '}' if matches!(pair_stack.last(), Some('$' | '{')) => {
-                    pair_stack.pop();
-                }
-                '/' if !matches!(pair_stack.last(), Some('\'' | '"' | '`')) => {
-                    if chars.next_if(|next| *next == '*').is_some() {
-                        pair_stack.push('*');
-                    } else if chars.next_if(|next| *next == '/').is_some() {
-                        break;
-                    }
-                }
-                '*' if chars.next_if(|next| *next == '/').is_some() => {
-                    pair_stack.pop();
-                }
-                '\\' if matches!(pair_stack.last(), Some('\'' | '"' | '`')) => {
-                    chars.next();
-                }
-                _ => {}
-            }
-        }
+        let should_keep_raw = scan_js_line(&mut pair_stack, s);
 
         // `detect_indent` skips blank lines, so their leftover indent shrinks on the next pass.
         // Drop it: it is trailing whitespace, except on the last line where content may follow.
@@ -2374,6 +2344,51 @@ fn dedent_and_reflow<'i, 'o: 'i>(
         ]
         .into_iter()
     })
+}
+
+/// Advances `pair_stack` across the quotes, braces and comments in `line`,
+/// returning whether the line started inside a template literal.
+fn scan_js_line(pair_stack: &mut Vec<char>, line: &str) -> bool {
+    let continues = matches!(pair_stack.last(), Some('`'));
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '`' | '\'' | '"' => {
+                let last = pair_stack.last();
+                if last.is_some_and(|last| *last == c) {
+                    pair_stack.pop();
+                } else if matches!(last, Some('$' | '{') | None) {
+                    pair_stack.push(c);
+                }
+            }
+            '$' if matches!(pair_stack.last(), Some('`'))
+                && chars.next_if(|next| *next == '{').is_some() =>
+            {
+                pair_stack.push('$');
+            }
+            '{' if !matches!(pair_stack.last(), Some('`' | '\'' | '"' | '/')) => {
+                pair_stack.push('{');
+            }
+            '}' if matches!(pair_stack.last(), Some('$' | '{')) => {
+                pair_stack.pop();
+            }
+            '/' if !matches!(pair_stack.last(), Some('\'' | '"' | '`')) => {
+                if chars.next_if(|next| *next == '*').is_some() {
+                    pair_stack.push('*');
+                } else if chars.next_if(|next| *next == '/').is_some() {
+                    break;
+                }
+            }
+            '*' if chars.next_if(|next| *next == '/').is_some() => {
+                pair_stack.pop();
+            }
+            '\\' if matches!(pair_stack.last(), Some('\'' | '"' | '`')) => {
+                chars.next();
+            }
+            _ => {}
+        }
+    }
+    continues
 }
 
 fn is_empty_element(children: &[Node], is_whitespace_sensitive: bool) -> bool {

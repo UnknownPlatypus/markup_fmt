@@ -193,9 +193,8 @@ pub(crate) static UNESCAPING_AC: LazyLock<AhoCorasick> =
 
 /// Width of the smallest indentation among non-blank lines, in columns.
 /// a space = a column, a tab = tab_width columns
-pub(crate) fn detect_indent(s: &str, tab_width: usize) -> usize {
-    s.lines()
-        .skip(if s.starts_with([' ', '\t']) { 0 } else { 1 })
+pub(crate) fn detect_indent<'a>(lines: impl Iterator<Item = &'a str>, tab_width: usize) -> usize {
+    lines
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
             line.chars()
@@ -391,6 +390,7 @@ pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use std::iter;
 
     #[rstest]
     fn matching_directive(
@@ -443,9 +443,10 @@ mod tests {
 
     #[test]
     fn detect_indent() {
-        assert_eq!(super::detect_indent("a\n    b\n    c", 4), 4);
-        assert_eq!(super::detect_indent("    a\n        b", 4), 4);
-        assert_eq!(super::detect_indent("a\n\tb\n    c", 4), 4);
+        assert_eq!(super::detect_indent(["\tb", "  c"].into_iter(), 4), 2);
+        assert_eq!(super::detect_indent(["  a", "", " b"].into_iter(), 4), 1);
+        // every line filtered out by the caller, e.g. an all-continuation script
+        assert_eq!(super::detect_indent(iter::empty::<&str>(), 4), 0);
     }
 
     #[test]
