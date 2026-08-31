@@ -839,31 +839,37 @@ impl<'s> Parser<'s> {
                         end = i;
                         break;
                     }
-                    // Both quotes delimit strings inside an interpolation, so an apostrophe
+                    // Both quotes delimit strings inside `{{ }}` and `{% %}`, so an apostrophe
                     // in a double-quoted argument can't end a single-quoted attribute.
+                    // `{# #}` comments have no string syntax, so their quotes are plain prose.
                     Some((_, c @ ('"' | '\''))) if !chars_stack.is_empty() => {
                         if chars_stack.last().is_some_and(|last| *last == c) {
                             chars_stack.pop();
-                        } else if chars_stack.last().is_some_and(|last| *last == '{') {
+                        } else if matches!(chars_stack.last(), Some('{' | '%')) {
                             chars_stack.push(c);
                         }
+                    }
+                    // A backslash escapes the next character inside a string literal,
+                    // so `'don\'t'` stays one string instead of ending at the apostrophe.
+                    Some((_, '\\')) if matches!(chars_stack.last(), Some('"' | '\'')) => {
+                        self.chars.next();
                     }
                     Some((_, '{'))
                         if can_interpolate && !matches!(chars_stack.last(), Some('"' | '\'')) =>
                     {
-                        // Outside Svelte, a lone `{` is literal text, so only `{{`, `{%` and `{#` open an interpolation.
-                        if matches!(self.language, Language::Svelte)
-                            || self
-                                .chars
-                                .peek()
-                                .is_some_and(|(_, c)| matches!(c, '{' | '%' | '#'))
-                        {
+                        if matches!(self.language, Language::Svelte) {
                             chars_stack.push('{');
+                        } else if let Some((_, c)) =
+                            self.chars.next_if(|(_, c)| matches!(c, '{' | '%' | '#'))
+                        {
+                            // Outside Svelte, a lone `{` is literal text, so only `{{`, `{%` and
+                            // `{#` open an interpolation; the marker char records which kind.
+                            chars_stack.push(c);
                         }
                     }
                     Some((_, '}'))
                         if can_interpolate
-                            && chars_stack.last().is_some_and(|last| *last == '{') =>
+                            && matches!(chars_stack.last(), Some('{' | '%' | '#')) =>
                     {
                         chars_stack.pop();
                     }

@@ -1,3 +1,6 @@
 <div data-json='{% trans "Page's settings" %}'></div>
 <div data-json="{% trans 'Say "hi"' %}"></div>
 <div data-json='{"url": "{% url opts|admin_urlname:'get_tree' %}"}'></div>
+<div title="{% translate 'You don\'t have permission.' context 'x' %}"></div>
+<div data-x='{% trans "Say \"hi\" or don\'t" %}'></div>
+<div title="{# don't treat this apostrophe as a string #}"></div>
