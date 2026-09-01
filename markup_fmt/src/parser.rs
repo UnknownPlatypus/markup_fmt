@@ -34,6 +34,7 @@ pub struct Parser<'s> {
     language: Language,
     custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
+    jinja_comments: Vec<&'s str>,
 }
 
 impl<'s> Parser<'s> {
@@ -43,6 +44,7 @@ impl<'s> Parser<'s> {
             language,
             custom_blocks,
             chars: source.char_indices().peekable(),
+            jinja_comments: Vec::new(),
         }
     }
 
@@ -1428,9 +1430,9 @@ impl<'s> Parser<'s> {
             }
         }
 
-        Ok(JinjaComment {
-            raw: unsafe { self.source.get_unchecked(start..end) },
-        })
+        let raw = unsafe { self.source.get_unchecked(start..end) };
+        self.jinja_comments.push(raw);
+        Ok(JinjaComment { raw })
     }
 
     fn parse_jinja_tag(&mut self) -> PResult<JinjaTag<'s>> {
@@ -1989,7 +1991,10 @@ impl<'s> Parser<'s> {
             children.push(self.parse_node()?);
         }
 
-        Ok(Root { children })
+        Ok(Root {
+            children,
+            jinja_comments: std::mem::take(&mut self.jinja_comments),
+        })
     }
 
     fn parse_svelte_at_tag(&mut self) -> PResult<SvelteAtTag<'s>> {

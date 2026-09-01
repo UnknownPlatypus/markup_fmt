@@ -296,6 +296,9 @@ pub enum NodeKind<'s> {
 #[derive(Debug)]
 pub struct Root<'s> {
     pub children: Vec<Node<'s>>,
+    /// Body of every `{# ... #}` comment in source order, at node or attribute position,
+    /// so consumers can look for directives without walking the tree.
+    pub jinja_comments: Vec<&'s str>,
 }
 
 #[derive(Debug)]

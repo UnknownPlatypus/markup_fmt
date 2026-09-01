@@ -148,3 +148,13 @@ fn build_settings(path: &Path) -> Settings {
     settings.remove_info();
     settings
 }
+
+/// Directive lookups read `Root::jinja_comments` instead of walking the tree.
+#[test]
+fn root_indexes_jinja_comment_bodies() {
+    let source = "{# a #}<div {#- b -#} class=\"x\">{% if c %}{# d #}{% endif %}</div>";
+    let root = markup_fmt::parser::Parser::new(source, Language::Jinja, vec![])
+        .parse_root()
+        .unwrap();
+    assert_eq!(root.jinja_comments, [" a ", "- b -", " d "]);
+}
