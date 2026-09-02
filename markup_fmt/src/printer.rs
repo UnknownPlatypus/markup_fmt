@@ -2479,7 +2479,7 @@ where
     ctx.options
         .ignore_comment_directive
         .iter()
-        .any(|directive| helpers::starts_with_directive(raw, directive))
+        .any(|directive| helpers::matches_directive(raw, directive))
 }
 
 fn should_add_whitespace_before_text_node<'s>(

@@ -361,30 +361,95 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
     }
 }
 
-/// Whether a comment's content starts with `directive`, implementing `\s*part(\s*:\s*part)*(\s|$)`,
-/// so `markup-fmt : ignore` is recognized just like `markup-fmt:ignore`.
-pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
+/// A comment body with Jinja's whitespace-control markers (`{#- ... -#}`) stripped:
+/// they belong to the delimiter, not to the directive.
+fn directive_body(comment: &str) -> &str {
+    comment
+        .trim()
+        .trim_start_matches(['-', '+'])
+        .trim_end_matches('-')
+        .trim()
+}
+
+/// What a comment body carries after a matched directive name.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DirectiveMatch<'s> {
+    /// A bare directive, optionally followed by free text: `markup-fmt:ignore why not`.
+    Bare,
+    /// A bracketed code list, with everything after `]` left as a free-text reason:
+    /// `markup-fmt:ignore[a, b]: reason` yields `"a, b"`.
+    Codes(&'s str),
+}
+
+impl<'s> DirectiveMatch<'s> {
+    /// The codes of a bracketed list, trimmed, skipping empty entries.
+    pub fn codes(&self) -> impl Iterator<Item = &'s str> {
+        match self {
+            Self::Bare => "",
+            Self::Codes(codes) => codes,
+        }
+        .split(',')
+        .map(str::trim)
+        .filter(|code| !code.is_empty())
+    }
+}
+
+/// Match a comment's content against `directive`, implementing `\s*part(\s*:\s*part)*`, so
+/// `markup-fmt : ignore` is recognized just like `markup-fmt:ignore`. The name must then be
+/// followed by end-of-comment or whitespace (a bare directive) or by a `[code, ...]` list.
+pub fn match_directive<'s>(comment: &'s str, directive: &str) -> Option<DirectiveMatch<'s>> {
     let mut parts = directive.split(':');
-    let Some(mut rest) = parts.next().and_then(|first| {
-        comment
-            .trim_ascii_start()
+    let mut rest = parts.next().and_then(|first| {
+        directive_body(comment)
             .as_bytes()
             .strip_prefix(first.as_bytes())
-    }) else {
-        return false;
-    };
+    })?;
     for part in parts {
-        let Some(next) = rest
+        rest = rest
             .trim_ascii_start()
             .strip_prefix(b":")
             .map(<[u8]>::trim_ascii_start)
-            .and_then(|rest| rest.strip_prefix(part.as_bytes()))
-        else {
-            return false;
-        };
-        rest = next;
+            .and_then(|rest| rest.strip_prefix(part.as_bytes()))?;
     }
-    rest.first().is_none_or(u8::is_ascii_whitespace)
+    match rest.first() {
+        None => Some(DirectiveMatch::Bare),
+        Some(byte) if byte.is_ascii_whitespace() => Some(DirectiveMatch::Bare),
+        // Stripping only ASCII prefixes keeps `rest` on a char boundary.
+        Some(b'[') => str::from_utf8(&rest[1..])
+            .ok()?
+            .split_once(']')
+            .map(|(codes, _reason)| DirectiveMatch::Codes(codes)),
+        Some(_) => None,
+    }
+}
+
+/// Whether `comment` matches the configured `directive`: a bare entry such as
+/// `markup-fmt:ignore` matches only a bare comment, while a `markup-fmt:ignore[format]`
+/// entry matches when the comment's code list contains that code.
+pub fn matches_directive(comment: &str, directive: &str) -> bool {
+    let (name, required) = match directive.split_once('[') {
+        Some((name, rest)) => match rest.strip_suffix(']') {
+            Some(code) => (name, Some(code)),
+            // A configured entry missing its `]` names no code, so it matches nothing.
+            None => return false,
+        },
+        None => (directive, None),
+    };
+    match (match_directive(comment, name), required) {
+        (Some(DirectiveMatch::Bare), None) => true,
+        (Some(matched @ DirectiveMatch::Codes(_)), Some(code)) => {
+            matched.codes().any(|listed| listed == code)
+        }
+        _ => false,
+    }
+}
+
+/// Whether a comment's content is a bare `directive`, carrying no code list.
+pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
+    matches!(
+        match_directive(comment, directive),
+        Some(DirectiveMatch::Bare)
+    )
 }
 
 #[cfg(test)]
@@ -403,7 +468,11 @@ mod tests {
             "\n markup-fmt:ignore",
             "markup-fmt:ignore ",
             "markup-fmt:ignore\nmore text",
-            "markup-fmt:ignore why not"
+            "markup-fmt:ignore why not",
+            // Jinja whitespace-control markers belong to the delimiter.
+            "- markup-fmt:ignore -",
+            "markup-fmt:ignore-",
+            "+ markup-fmt:ignore"
         )]
         comment: &str,
     ) {
@@ -423,11 +492,52 @@ mod tests {
             "MARKUP-FMT:IGNORE",
             ":ignore",
             "prefix markup-fmt:ignore",
-            "markup-fmt:i gnore"
+            "markup-fmt:i gnore",
+            // A code list is a directive, but not a bare one.
+            "markup-fmt:ignore[a]"
         )]
         comment: &str,
     ) {
         assert!(!super::starts_with_directive(comment, "markup-fmt:ignore"));
+    }
+
+    #[rstest]
+    #[case::single("markup-fmt:ignore[a]", vec!["a"])]
+    #[case::several("markup-fmt : ignore[a, b ,c]", vec!["a", "b", "c"])]
+    #[case::reason("markup-fmt:ignore[a]: why not", vec!["a"])]
+    #[case::markers("- markup-fmt:ignore[a] -", vec!["a"])]
+    #[case::separators_only("markup-fmt:ignore[ , ]", vec![])]
+    fn directive_code_lists(#[case] comment: &str, #[case] expected: Vec<&str>) {
+        let matched = super::match_directive(comment, "markup-fmt:ignore").expect("a directive");
+        assert_eq!(matched.codes().collect::<Vec<_>>(), expected);
+    }
+
+    #[rstest]
+    // A bare configured entry ignores comments carrying a code list, and vice versa.
+    #[case("markup-fmt:ignore", "markup-fmt:ignore", true)]
+    #[case("markup-fmt:ignore[format]", "markup-fmt:ignore", false)]
+    #[case("markup-fmt:ignore", "markup-fmt:ignore[format]", false)]
+    // A code entry matches on membership, whatever the order or spacing.
+    #[case("markup-fmt:ignore[format]", "markup-fmt:ignore[format]", true)]
+    #[case("markup-fmt:ignore[ format ]", "markup-fmt:ignore[format]", true)]
+    #[case("markup-fmt:ignore[a, format]", "markup-fmt:ignore[format]", true)]
+    #[case("markup-fmt:ignore[format, a]", "markup-fmt:ignore[format]", true)]
+    #[case("markup-fmt:ignore[a]", "markup-fmt:ignore[format]", false)]
+    fn configured_directive_entries(
+        #[case] comment: &str,
+        #[case] configured: &str,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(super::matches_directive(comment, configured), expected);
+    }
+
+    /// An unterminated list is not a directive at all, so it cannot opt a node out.
+    #[test]
+    fn unterminated_code_list() {
+        assert_eq!(
+            super::match_directive("markup-fmt:ignore[a", "markup-fmt:ignore"),
+            None
+        );
     }
 
     #[test]
