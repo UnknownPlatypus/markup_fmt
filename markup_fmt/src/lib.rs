@@ -12,7 +12,11 @@ mod state;
 
 use crate::{config::FormatOptions, ctx::Ctx, parser::Parser, printer::DocGen, state::State};
 pub use crate::{
-    ctx::Hints, debug::debug_doc_tree, error::*, helpers::starts_with_directive, parser::Language,
+    ctx::Hints,
+    debug::debug_doc_tree,
+    error::*,
+    helpers::{DirectiveMatch, match_directive, starts_with_directive},
+    parser::Language,
 };
 use anyhow::Error;
 use std::{borrow::Cow, path::Path};
