@@ -361,16 +361,6 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
     }
 }
 
-/// A comment body with Jinja's whitespace-control markers (`{#- ... -#}`) stripped:
-/// they belong to the delimiter, not to the directive.
-fn directive_body(comment: &str) -> &str {
-    comment
-        .trim()
-        .trim_start_matches(['-', '+'])
-        .trim_end_matches('-')
-        .trim()
-}
-
 /// What a comment body carries after a matched directive name.
 #[derive(Debug, PartialEq, Eq)]
 pub enum DirectiveMatch<'s> {
@@ -397,26 +387,25 @@ impl<'s> DirectiveMatch<'s> {
 /// Match a comment's content against `directive`, implementing `\s*part(\s*:\s*part)*`, so
 /// `markup-fmt : ignore` is recognized just like `markup-fmt:ignore`. The name must then be
 /// followed by end-of-comment or whitespace (a bare directive) or by a `[code, ...]` list.
+/// Jinja's whitespace-control markers (`{#- ... -#}`) belong to the delimiter and are skipped.
 pub fn match_directive<'s>(comment: &'s str, directive: &str) -> Option<DirectiveMatch<'s>> {
-    let mut parts = directive.split(':');
-    let mut rest = parts.next().and_then(|first| {
-        directive_body(comment)
-            .as_bytes()
-            .strip_prefix(first.as_bytes())
-    })?;
-    for part in parts {
-        rest = rest
-            .trim_ascii_start()
-            .strip_prefix(b":")
-            .map(<[u8]>::trim_ascii_start)
-            .and_then(|rest| rest.strip_prefix(part.as_bytes()))?;
+    // This runs on every comment of every file, so a prose comment must fail on its first
+    // byte, before anything reads the rest of the body.
+    let mut rest = comment
+        .trim_start()
+        .trim_start_matches(['-', '+'])
+        .trim_start();
+    for (index, part) in directive.split(':').enumerate() {
+        if index > 0 {
+            rest = rest.trim_start().strip_prefix(':')?.trim_start();
+        }
+        rest = rest.strip_prefix(part)?;
     }
-    match rest.first() {
+    let rest = rest.trim_end().trim_end_matches('-').trim_end();
+    match rest.as_bytes().first() {
         None => Some(DirectiveMatch::Bare),
         Some(byte) if byte.is_ascii_whitespace() => Some(DirectiveMatch::Bare),
-        // Stripping only ASCII prefixes keeps `rest` on a char boundary.
-        Some(b'[') => str::from_utf8(&rest[1..])
-            .ok()?
+        Some(b'[') => rest[1..]
             .split_once(']')
             .map(|(codes, _reason)| DirectiveMatch::Codes(codes)),
         Some(_) => None,
