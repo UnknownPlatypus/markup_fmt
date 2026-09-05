@@ -735,6 +735,9 @@ impl<'s> Parser<'s> {
                     match chars.next() {
                         Some((_, '{')) => self.parse_native_attr().map(Attribute::Native),
                         Some((_, '#')) => self.parse_jinja_comment().map(Attribute::JinjaComment),
+                        Some((_, '%')) if self.jinja_tag_starts_attr_name() => {
+                            self.parse_native_attr().map(Attribute::Native)
+                        }
                         _ => self.parse_jinja_tag_or_block(None, &mut Parser::parse_attr),
                     }
                 } else {
@@ -752,6 +755,19 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// A `{% … %}` right before an `=` names the attribute, as in `{% formaction %}="x"`,
+    /// instead of standing on its own the way `{% if x %}` does.
+    fn jinja_tag_starts_attr_name(&mut self) -> bool {
+        if !matches!(self.language, Language::Jinja | Language::Django) {
+            return false;
+        }
+        let after_open = self.peek_pos() + "{%".len();
+        self.source[after_open..]
+            .find("%}")
+            .and_then(|end| self.source[after_open + end + "%}".len()..].chars().next())
+            .is_some_and(|c| c == '=')
+    }
+
     fn parse_attr_name(&mut self) -> PResult<&'s str> {
         if matches!(
             self.language,
@@ -762,11 +778,16 @@ impl<'s> Parser<'s> {
                     let start = *i;
                     let mut chars = self.chars.clone();
                     chars.next();
-                    if let Some((_, '{')) = chars.next() {
-                        self.parse_mustache_interpolation()?;
-                        Some((start, self.peek_pos()))
-                    } else {
-                        None
+                    match chars.next() {
+                        Some((_, '{')) => {
+                            self.parse_mustache_interpolation()?;
+                            Some((start, self.peek_pos()))
+                        }
+                        Some((_, '%')) if self.jinja_tag_starts_attr_name() => {
+                            self.parse_jinja_tag()?;
+                            Some((start, self.peek_pos()))
+                        }
+                        _ => None,
                     }
                 }
                 Some((_, c)) if is_attr_name_char(*c) => self
@@ -787,7 +808,11 @@ impl<'s> Parser<'s> {
                     chars.next();
                     match chars.next() {
                         Some((_, '%')) => {
-                            break;
+                            if !self.jinja_tag_starts_attr_name() {
+                                break;
+                            }
+                            self.parse_jinja_tag()?;
+                            end = self.peek_pos();
                         }
                         Some((_, '{')) => {
                             self.parse_mustache_interpolation()?;
