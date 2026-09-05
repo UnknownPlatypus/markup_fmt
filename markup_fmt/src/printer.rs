@@ -483,6 +483,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             is_root: false,
             in_svg: tag_name.eq_ignore_ascii_case("svg"),
             indent_level: state.indent_level,
+            in_attr_loop: false,
         };
 
         let self_closing = if helpers::is_void_element(tag_name, ctx.language) {
@@ -950,21 +951,58 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Attribute<'s>> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
+        // A loop body repeats, so whitespace at its edges is the only separator between
+        // iterations: keep it as written, in the loop and in every block nested in it.
+        let in_loop = state.in_attr_loop
+            || matches!(
+                self.body.first(),
+                Some(JinjaTagOrChildren::Tag(tag)) if parse_jinja_tag_name(tag) == "for"
+            );
+        let state = &State {
+            in_attr_loop: in_loop,
+            ..*state
+        };
+        let source = ctx.source;
+        let edge = |pos: Option<usize>| match pos {
+            Some(pos)
+                if in_loop
+                    && source
+                        .as_bytes()
+                        .get(pos)
+                        .is_some_and(u8::is_ascii_whitespace) =>
+            {
+                Doc::line_or_space()
+            }
+            _ => Doc::line_or_nil(),
+        };
+        let tag_at = |i: usize| match self.body.get(i) {
+            Some(JinjaTagOrChildren::Tag(tag)) => Some(tag),
+            _ => None,
+        };
         Doc::list(
             self.body
                 .iter()
-                .map(|child| match child {
+                .enumerate()
+                .map(|(i, child)| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => match children.as_slice() {
                         // Django comment content is raw text, so it isn't wrapped nor re-indented.
                         [Attribute::JinjaRawText(raw)] => format_raw_content(raw, true),
-                        children => Doc::line_or_nil()
-                            .concat(itertools::intersperse(
-                                children.iter().map(|attr| attr.doc(ctx, state)),
-                                Doc::line_or_space(),
-                            ))
-                            .nest(ctx.indent_width)
-                            .append(Doc::line_or_nil()),
+                        children => {
+                            // Children are always fenced by tags, whose `start` is the byte after `{%`.
+                            let leading = i
+                                .checked_sub(1)
+                                .and_then(tag_at)
+                                .map(|tag| tag.start + tag.content.len() + 2);
+                            let trailing = tag_at(i + 1).and_then(|tag| tag.start.checked_sub(3));
+                            edge(leading)
+                                .concat(itertools::intersperse(
+                                    children.iter().map(|attr| attr.doc(ctx, state)),
+                                    Doc::line_or_space(),
+                                ))
+                                .nest(ctx.indent_width)
+                                .append(edge(trailing))
+                        }
                     },
                 })
                 .collect(),

@@ -1,0 +1,8 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<div {% for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}></div>
+<div {% for k, v in attrs.items() %}{{ k }}="{{ v }}" {% endfor %}></div>
+<div {% for c in parts %}{{ c }}{% endfor %}></div>
+<i {% for k, v in a %}{% if v %} {{ k }}="{{ v }}"{% endif %}{% endfor %}></i>
+<div {% if x %}class="a"{% endif %}></div>
