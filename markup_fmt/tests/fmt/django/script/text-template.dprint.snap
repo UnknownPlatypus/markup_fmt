@@ -1,0 +1,12 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<script type="text/template"><div>{{ name }}</div></script>
+<script type="text/x-handlebars-template">
+  <div>{{ name }}</div>
+</script>
+<script type="text/html">{% if enabled %}<b>{{ name }}</b>{% endif %}</script>
+<div>
+  <script type="text/template">
+        <li>{{ item }}</li></script>
+</div>
