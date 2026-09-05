@@ -54,7 +54,7 @@ fn unterminated_interpolation_is_a_syntax_error() {
         })
     };
 
-    for input in ["{{{", "{{\"", "{{'", "{{`", "{{ a"] {
+    for input in ["{{{", "{{\"", "{{'", "{{`", "{{ a", "{{ \"}}"] {
         for language in [
             Language::Vue,
             Language::Svelte,

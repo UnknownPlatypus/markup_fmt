@@ -1,0 +1,8 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{{ "}}" }}
+{{ "{{ x }}" }}
+{{ '}' ~ "}" }}
+{% set s = "%}" %}
+{% if x == "%}" %}<p>{{ "{% raw %}" }}</p>{% endif %}

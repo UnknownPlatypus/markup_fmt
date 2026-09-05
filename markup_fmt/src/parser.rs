@@ -1441,10 +1441,23 @@ impl<'s> Parser<'s> {
         };
         let start = start + 1;
 
+        // Jinja tokenizes string literals inside a tag, so a `%}` in one doesn't close it.
+        // Django's lexer matches `{%.*?%}`, so it stops at the first `%}` regardless.
+        let track_strings = matches!(self.language, Language::Jinja);
+        let mut quote = None;
+
         let end;
         loop {
             match self.chars.next() {
-                Some((i, '%')) => {
+                Some((_, c @ ('\'' | '"'))) if track_strings => match quote {
+                    Some(open) if open == c => quote = None,
+                    None => quote = Some(c),
+                    _ => {}
+                },
+                Some((_, '\\')) if quote.is_some() => {
+                    self.chars.next();
+                }
+                Some((i, '%')) if quote.is_none() => {
                     if self.chars.next_if(|(_, c)| *c == '}').is_some() {
                         end = i;
                         break;
@@ -2527,14 +2540,17 @@ impl<'s> Parser<'s> {
                         pair_stack.push('{');
                     }
                 }
-                Some((i, '}')) => {
-                    if pair_stack.is_empty() {
-                        end = i;
-                        break;
-                    } else {
+                Some((i, '}')) => match pair_stack.last() {
+                    // A string literal swallows braces, mirroring the `{` arm above.
+                    Some('\'' | '"' | '`') => continue,
+                    Some(..) => {
                         pair_stack.pop();
                     }
-                }
+                    None => {
+                        end = i;
+                        break;
+                    }
+                },
                 Some((_, c @ '\'' | c @ '"' | c @ '`')) => match pair_stack.last() {
                     Some(last) if *last == c => {
                         pair_stack.pop();
