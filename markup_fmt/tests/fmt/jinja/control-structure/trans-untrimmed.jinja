@@ -1,0 +1,22 @@
+{% trans %}Short   with   double   spaces{% endtrans %}
+
+{% trans count=list|length %}
+    There is {{ count }}   <b>object</b>.
+{% pluralize %}
+    There are {{ count }}   objects.
+{% endtrans %}
+
+<div>
+    {% trans user=user.name %}
+        Hi   {{ user }},
+        welcome   back.
+    {% endtrans %}
+</div>
+
+{% trans trimmed %}
+    This    body    is    reflowed.
+{% endtrans %}
+
+{%- trans -%}
+   Whitespace   control   is   kept
+{%- endtrans -%}
