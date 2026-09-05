@@ -1038,31 +1038,33 @@ impl<'s> DocGen<'s> for JinjaInterpolation<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
+        let formatted = ctx.format_jinja(self.expr, self.start, true, state);
         match ctx.language {
-            Language::Jinja => Doc::text("{{")
-                .append(if self.trim_prev {
-                    Doc::char('-')
-                } else {
-                    Doc::nil()
-                })
-                .append(Doc::line_or_space())
-                .concat(reflow_with_indent(
-                    ctx.format_jinja(self.expr, self.start, true, state).trim(),
-                    true,
-                ))
-                .nest(ctx.indent_width)
-                .append(Doc::line_or_space())
-                .append(if self.trim_next {
-                    Doc::char('-')
-                } else {
-                    Doc::nil()
-                })
-                .append(Doc::text("}}"))
-                .group(),
-            Language::Django => Doc::text(format!(
-                "{{{{ {} }}}}",
-                collapse_django_ws(&ctx.format_jinja(self.expr, self.start, true, state))
-            )),
+            Language::Jinja => {
+                let prefix = if self.trim_prev { "-" } else { "" };
+                let suffix = if self.trim_next { "-" } else { "" };
+                let content = formatted.trim();
+                if content.is_empty() {
+                    // The two `line_or_space` around an empty body would print two spaces.
+                    return Doc::text(format!("{{{{{prefix} {suffix}}}}}"));
+                }
+                Doc::text("{{")
+                    .append(Doc::text(prefix))
+                    .append(Doc::line_or_space())
+                    .concat(reflow_with_indent(content, true))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text(suffix))
+                    .append(Doc::text("}}"))
+                    .group()
+            }
+            Language::Django => {
+                let content = collapse_django_ws(&formatted);
+                if content.is_empty() {
+                    return Doc::text("{{ }}");
+                }
+                Doc::text(format!("{{{{ {content} }}}}"))
+            }
             _ => unreachable!(),
         }
     }
@@ -1090,15 +1092,18 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
                     (content, "")
                 };
 
+                let formatted = ctx.format_jinja(content, self.start + prefix.len(), false, state);
+                let content = formatted.trim();
+                if content.is_empty() {
+                    // The two `line_or_space` around an empty body would print two spaces.
+                    return Doc::text(format!("{{%{prefix} {suffix}%}}"));
+                }
+
                 let mut docs = Vec::with_capacity(5);
                 docs.push(Doc::text("{%"));
                 docs.push(Doc::text(prefix));
                 docs.push(Doc::line_or_space());
-                docs.extend(reflow_with_indent(
-                    ctx.format_jinja(content, self.start + prefix.len(), false, state)
-                        .trim(),
-                    true,
-                ));
+                docs.extend(reflow_with_indent(content, true));
                 Doc::list(docs)
                     .nest(ctx.indent_width)
                     .append(Doc::line_or_space())
@@ -1106,10 +1111,14 @@ impl<'s> DocGen<'s> for JinjaTag<'s> {
                     .append(Doc::text("%}"))
                     .group()
             }
-            Language::Django => Doc::text(format!(
-                "{{% {} %}}",
-                collapse_django_ws(&ctx.format_jinja(self.content, self.start, false, state))
-            )),
+            Language::Django => {
+                let formatted = ctx.format_jinja(self.content, self.start, false, state);
+                let content = collapse_django_ws(&formatted);
+                if content.is_empty() {
+                    return Doc::text("{% %}");
+                }
+                Doc::text(format!("{{% {content} %}}"))
+            }
             _ => unreachable!(),
         }
     }
