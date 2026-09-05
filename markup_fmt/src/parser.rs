@@ -1055,8 +1055,15 @@ impl<'s> Parser<'s> {
                 Some((_, '/')) => {
                     self.chars.next();
                     match self.chars.peek() {
-                        Some((_, '>')) => {
-                            self.chars.next();
+                        Some((_, '/' | '*')) if self.language == Language::Svelte => {
+                            attrs.push(Attribute::JsComment(self.parse_js_comment()?));
+                        }
+                        _ => {
+                            // HTML ignores whitespace between the `/` and the `>`, as in `<br/ >`.
+                            self.skip_ws();
+                            if self.chars.next_if(|(_, c)| *c == '>').is_none() {
+                                return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag));
+                            }
                             return Ok(Element {
                                 tag_name,
                                 attrs,
@@ -1066,10 +1073,6 @@ impl<'s> Parser<'s> {
                                 void_element,
                             });
                         }
-                        Some((_, '/' | '*')) if self.language == Language::Svelte => {
-                            attrs.push(Attribute::JsComment(self.parse_js_comment()?));
-                        }
-                        _ => return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag)),
                     }
                 }
                 Some((_, '>')) => {
