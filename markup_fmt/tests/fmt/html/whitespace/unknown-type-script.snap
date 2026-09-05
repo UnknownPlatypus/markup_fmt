@@ -6,3 +6,4 @@ source: markup_fmt/tests/fmt.rs
         <p>x</p>
   </script>
 </div>
+<script type="text/template"><span>x</span></script>

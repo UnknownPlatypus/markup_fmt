@@ -765,11 +765,14 @@ impl<'s> DocGen<'s> for Element<'s> {
                                     Some(ctx.indent_width),
                                 ))
                             };
-                            if is_script_indent {
-                                docs.push(doc.nest(ctx.indent_width));
-                            } else {
-                                docs.push(doc);
-                            }
+                            docs.push(
+                                if is_script_indent {
+                                    doc.nest(ctx.indent_width)
+                                } else {
+                                    doc
+                                }
+                                .append(Doc::hard_line()),
+                            );
                         }
                         Some(
                             "importmap"
@@ -781,17 +784,21 @@ impl<'s> DocGen<'s> for Element<'s> {
                             let formatted = ctx.format_json(text_node.raw, text_node.start, &state);
                             let doc =
                                 Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true));
-                            if is_script_indent {
-                                docs.push(doc.nest(ctx.indent_width));
-                            } else {
-                                docs.push(doc);
-                            }
+                            docs.push(
+                                if is_script_indent {
+                                    doc.nest(ctx.indent_width)
+                                } else {
+                                    doc
+                                }
+                                .append(Doc::hard_line()),
+                            );
                         }
+                        // Unknown types hold templates, not code: keep the body verbatim
+                        // like `<pre>` and only break before `</script>` if the source did.
                         Some(..) => {
-                            docs.extend(reflow_raw(text_node.raw.trim_ascii_end()));
+                            docs.push(format_raw_content(text_node.raw, true));
                         }
                     }
-                    docs.push(Doc::hard_line());
                 }
             }
         } else if tag_name.eq_ignore_ascii_case("style") && ctx.language != Language::Xml {
