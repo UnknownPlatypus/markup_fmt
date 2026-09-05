@@ -1,0 +1,28 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<p>{% blocktranslate %}Short   with   double   spaces{% endblocktranslate %}</p>
+<p>
+  {% blocktranslate %}This is a fairly long translatable sentence that will certainly exceed the configured print width of one hundred and twenty characters.{% endblocktranslate %}
+</p>
+
+{% blocktranslate count counter=items|length %}
+    There is {{ counter }}   <b>item</b>   left.
+{% plural %}
+    There are {{ counter }}   <b>items</b>   left.
+{% endblocktranslate %}
+
+<div>
+  {% blocktrans with name=user.name %}
+        Hi   {{ name }},
+        welcome   back.
+    {% endblocktrans %}
+</div>
+
+{% blocktranslate trimmed %}
+  This body is reflowed.
+{% endblocktranslate %}
+
+{% blocktranslate with amount=order.total trimmed %}
+  Total: {{ amount }}
+{% endblocktranslate %}

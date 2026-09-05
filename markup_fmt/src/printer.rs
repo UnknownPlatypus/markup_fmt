@@ -978,12 +978,25 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
-        let is_raw_content_block = self
-            .body
-            .first()
-            .is_some_and(|first| {
-                matches!(first, JinjaTagOrChildren::Tag(tag) if matches!(ctx.language, Language::Django) && matches!(parse_jinja_tag_name(tag), "comment" | "verbatim"))
-            });
+        let first_tag = match self.body.first() {
+            Some(JinjaTagOrChildren::Tag(tag)) => Some(tag),
+            _ => None,
+        };
+        let is_raw_content_block = first_tag.is_some_and(|tag| {
+            matches!(ctx.language, Language::Django)
+                && matches!(parse_jinja_tag_name(tag), "comment" | "verbatim")
+        });
+        // An untrimmed translation body is the gettext msgid, so every byte of it,
+        // the line break before the closing tag included, must survive formatting.
+        let is_untrimmed_translation_block = first_tag.is_some_and(|tag| {
+            matches!(
+                (ctx.language, parse_jinja_tag_name(tag)),
+                (Language::Django, "blocktrans" | "blocktranslate") | (Language::Jinja, "trans")
+            ) && !tag
+                .content
+                .split_ascii_whitespace()
+                .any(|token| token == "trimmed")
+        });
 
         Doc::list(
             self.body
@@ -996,6 +1009,13 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                                 children
                                     .iter()
                                     .map(|node| format_raw_content(node.raw, true))
+                                    .collect(),
+                            )
+                        } else if is_untrimmed_translation_block {
+                            Doc::list(
+                                children
+                                    .iter()
+                                    .flat_map(|node| reflow_raw(node.raw))
                                     .collect(),
                             )
                         } else {
