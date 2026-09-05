@@ -1,9 +1,0 @@
----
-source: markup_fmt/tests/fmt.rs
----
-{# comment %}
-
-This gets nuked
-
-This too
-#}

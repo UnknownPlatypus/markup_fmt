@@ -61,6 +61,8 @@ pub enum SyntaxErrorKind {
     ExpectVentoBlockEnd,
     ExpectVueDirective,
     ExpectXmlDecl,
+    UnterminatedJinjaComment,
+    UnterminatedJinjaTag,
 }
 
 impl fmt::Display for SyntaxErrorKind {
@@ -129,6 +131,10 @@ impl fmt::Display for SyntaxErrorKind {
             SyntaxErrorKind::ExpectVentoBlockEnd => "expected Vento block end".into(),
             SyntaxErrorKind::ExpectVueDirective => "expected Vue directive".into(),
             SyntaxErrorKind::ExpectXmlDecl => "expected XML declaration".into(),
+            SyntaxErrorKind::UnterminatedJinjaComment => {
+                "unterminated comment, expected a closing `#}`".into()
+            }
+            SyntaxErrorKind::UnterminatedJinjaTag => "unterminated tag, expected a closing `%}`".into(),
         };
 
         write!(f, "{reason}")

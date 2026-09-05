@@ -1451,9 +1451,13 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some(..) => continue,
+                // Taking the rest of the source as the comment silently swallows the markup
+                // after it, and auto-closing it with a `#}` rewrites the template.
                 None => {
-                    end = self.source.len();
-                    break;
+                    return Err(self.emit_error_with_pos(
+                        SyntaxErrorKind::UnterminatedJinjaComment,
+                        start - "{#".len(),
+                    ));
                 }
             }
         }
@@ -1493,7 +1497,12 @@ impl<'s> Parser<'s> {
                 }
                 Some(..) => continue,
                 // Recovering here would leave the tag content empty, silently deleting it.
-                None => return Err(self.emit_error(SyntaxErrorKind::ExpectChar('}'))),
+                None => {
+                    return Err(self.emit_error_with_pos(
+                        SyntaxErrorKind::UnterminatedJinjaTag,
+                        start - "{%".len(),
+                    ));
+                }
             }
         }
 
