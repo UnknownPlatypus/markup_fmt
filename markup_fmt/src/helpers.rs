@@ -390,11 +390,14 @@ impl<'s> DirectiveMatch<'s> {
 /// Jinja's whitespace-control markers (`{#- ... -#}`) belong to the delimiter and are skipped.
 pub fn match_directive<'s>(comment: &'s str, directive: &str) -> Option<DirectiveMatch<'s>> {
     // This runs on every comment of every file, so a prose comment must fail on its first
-    // byte, before anything reads the rest of the body.
+    // byte, before the `split` below even builds its searcher over `directive`.
     let mut rest = comment
         .trim_start()
         .trim_start_matches(['-', '+'])
         .trim_start();
+    if rest.as_bytes().first() != directive.as_bytes().first() {
+        return None;
+    }
     for (index, part) in directive.split(':').enumerate() {
         if index > 0 {
             rest = rest.trim_start().strip_prefix(':')?.trim_start();
