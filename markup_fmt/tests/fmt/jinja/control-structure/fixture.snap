@@ -68,13 +68,13 @@ source: markup_fmt/tests/fmt.rs
 {% trans user=user.username %}Hello, {{ user }}!{% endtrans %}
 
 {% trans book_title=book.title, author=author.name %}
-  This is {{ book_title }} by {{ author }}
+This is {{ book_title }} by {{ author }}
 {% endtrans %}
 
 {% trans count=list|length %}
-  There is {{ count }} {{ name }} object.
-  {% pluralize %}
-  There are {{ count }} {{ name }} objects.
+There is {{ count }} {{ name }} object.
+{% pluralize %}
+There are {{ count }} {{ name }} objects.
 {% endtrans %}
 
 {% raw %}

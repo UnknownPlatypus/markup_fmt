@@ -32,7 +32,7 @@ source: markup_fmt/tests/fmt.rs
 {% endifchanged %}
 
 {% blocktrans %}
-  Simple translation
+Simple translation
 {% plural %}
-  Multiple translations
+Multiple translations
 {% endblocktrans %}
