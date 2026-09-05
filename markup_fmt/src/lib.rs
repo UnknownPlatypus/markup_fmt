@@ -273,11 +273,11 @@ mod tests {
     fn unterminated_jinja_tag_is_rejected() {
         for language in [Language::Jinja, Language::Django] {
             // Pre-fix, all of these formatted with the tag content replaced by `{%  %}`.
-            for input in [
-                "{%",
-                "{% if x",
-                "{% cycle 'a' 'b'",
-                "{% if x %}body{% endif %}{% cycle 'a'",
+            for (input, opener) in [
+                ("{%", 0),
+                ("{% if x", 0),
+                ("{% cycle 'a' 'b'", 0),
+                ("{% if x %}body{% endif %}{% cycle 'a'", 25),
             ] {
                 let err = format_text(input, language, &Default::default(), |code, _| {
                     Ok(Cow::from(code))
@@ -287,11 +287,34 @@ mod tests {
                     matches!(
                         err,
                         FormatError::Syntax(SyntaxError {
-                            kind: SyntaxErrorKind::ExpectChar('}'),
+                            kind: SyntaxErrorKind::UnterminatedJinjaTag { pos, .. },
                             ..
-                        })
+                        }) if pos == opener
                     ),
-                    "expected a missing `%}}` error for {input:?} in {language:?}, got {err}"
+                    "expected a missing `%}}` error at {opener} for {input:?} in {language:?}, got {err}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unterminated_jinja_comment_is_rejected() {
+        for language in [Language::Jinja, Language::Django] {
+            // Pre-fix, the rest of the file was swallowed and closed with a printed `#}`.
+            for (input, opener) in [("{#", 0), ("<p>a {#} b</p>", 5), ("<div {# x >", 5)] {
+                let err = format_text(input, language, &Default::default(), |code, _| {
+                    Ok(Cow::from(code))
+                })
+                .unwrap_err();
+                assert!(
+                    matches!(
+                        err,
+                        FormatError::Syntax(SyntaxError {
+                            kind: SyntaxErrorKind::UnterminatedJinjaComment { pos, .. },
+                            ..
+                        }) if pos == opener
+                    ),
+                    "expected a missing `#}}` error at {opener} for {input:?} in {language:?}, got {err}"
                 );
             }
         }
