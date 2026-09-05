@@ -15,7 +15,7 @@ pub use crate::{
     ctx::Hints,
     debug::debug_doc_tree,
     error::*,
-    helpers::{DirectiveMatch, match_directive, starts_with_directive},
+    helpers::{Directive, ParseErrorKind, matches_directive, parse_directive},
     parser::Language,
 };
 use anyhow::Error;
@@ -82,7 +82,7 @@ where
                 .language
                 .ignore_file_comment_directive
                 .iter()
-                .any(|directive| starts_with_directive(raw, directive))
+                .any(|directive| matches_directive(raw, directive))
         } else {
             false
         }

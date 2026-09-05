@@ -1,6 +1,6 @@
 use crate::Language;
 use aho_corasick::AhoCorasick;
-use std::{borrow::Cow, cmp::Ordering, ops::ControlFlow, sync::LazyLock};
+use std::{borrow::Cow, cmp::Ordering, fmt, ops::ControlFlow, sync::LazyLock};
 
 pub(crate) fn is_component(name: &str) -> bool {
     name.contains('-') || name.contains(|c: char| c.is_ascii_uppercase())
@@ -361,58 +361,123 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
     }
 }
 
-/// What a comment body carries after a matched directive name.
-#[derive(Debug, PartialEq, Eq)]
-pub enum DirectiveMatch<'s> {
-    /// A bare directive, optionally followed by free text: `markup-fmt:ignore why not`.
-    Bare,
-    /// A bracketed code list, with everything after `]` left as a free-text reason:
-    /// `markup-fmt:ignore[a, b]: reason` yields `"a, b"`.
-    Codes(&'s str),
+/// Why a comment addressed to a directive namespace is no directive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseErrorKind {
+    /// The keyword after the namespace is none the caller honors.
+    UnknownKeyword,
+    /// An empty `[]` list.
+    MissingCodes,
+    MissingBracket,
+    MissingComma,
+    /// A code must start with a letter.
+    InvalidCode,
 }
 
-impl<'s> DirectiveMatch<'s> {
-    /// The codes of a bracketed list, trimmed, skipping empty entries.
-    pub fn codes(&self) -> impl Iterator<Item = &'s str> {
-        match self {
-            Self::Bare => "",
-            Self::Codes(codes) => codes,
-        }
-        .split(',')
-        .map(str::trim)
-        .filter(|code| !code.is_empty())
+impl fmt::Display for ParseErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::UnknownKeyword => "unknown directive",
+            Self::MissingCodes => "missing suppression codes like `[code, ...]`",
+            Self::MissingBracket => "missing closing bracket",
+            Self::MissingComma => "missing comma between codes",
+            Self::InvalidCode => "invalid code",
+        })
     }
 }
 
-/// Match a comment's content against `directive`, implementing `\s*part(\s*:\s*part)*`, so
-/// `markup-fmt : ignore` is recognized just like `markup-fmt:ignore`. The name must then be
-/// followed by end-of-comment or whitespace (a bare directive) or by a `[code, ...]` list.
-/// Jinja's whitespace-control markers (`{#- ... -#}`) belong to the delimiter and are skipped.
-pub fn match_directive<'s>(comment: &'s str, directive: &str) -> Option<DirectiveMatch<'s>> {
+impl std::error::Error for ParseErrorKind {}
+
+/// A `namespace:keyword[code, ...]` directive read from a comment body.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Directive<'s> {
+    pub keyword: &'s str,
+    /// The `[...]` codes; a bare directive lists none.
+    pub codes: Vec<&'s str>,
+}
+
+/// Parse a comment body as a `namespace:keyword[code, ...]` directive, `keywords` being the
+/// ones the caller honors. `None` is a comment not addressed to `namespace` at all; an empty
+/// namespace reads a bare `keyword[code, ...]`.
+///
+/// Whitespace is tolerated around the colon and before the list, a bare keyword may be
+/// followed by free text, and so may the closing bracket. Jinja's whitespace-control markers
+/// (`{#- ... -#}`) belong to the delimiter and are skipped.
+pub fn parse_directive<'s>(
+    comment: &'s str,
+    namespace: &str,
+    keywords: &[&str],
+) -> Option<Result<Directive<'s>, ParseErrorKind>> {
     // This runs on every comment of every file, so a prose comment must fail on its first
-    // byte, before the `split` below even builds its searcher over `directive`.
+    // byte, before anything reads the rest of the body.
     let mut rest = comment
         .trim_start()
         .trim_start_matches(['-', '+'])
         .trim_start();
-    if rest.as_bytes().first() != directive.as_bytes().first() {
-        return None;
+    if !namespace.is_empty() {
+        rest = rest
+            .strip_prefix(namespace)?
+            .trim_start()
+            .strip_prefix(':')?;
     }
-    for (index, part) in directive.split(':').enumerate() {
-        if index > 0 {
-            rest = rest.trim_start().strip_prefix(':')?.trim_start();
+    let rest = rest.trim().trim_end_matches('-');
+    let keyword_end = rest
+        .find(|c: char| c == '[' || c.is_whitespace())
+        .unwrap_or(rest.len());
+    let (keyword, rest) = rest.split_at(keyword_end);
+    if !keywords.contains(&keyword) {
+        return Some(Err(ParseErrorKind::UnknownKeyword));
+    }
+    let codes = match rest.trim_start().strip_prefix('[') {
+        Some(list) => match parse_codes(list) {
+            Ok(codes) => codes,
+            Err(error) => return Some(Err(error)),
+        },
+        None => Vec::new(),
+    };
+    Some(Ok(Directive { keyword, codes }))
+}
+
+/// The codes of a `[...]` list, `list` starting right after the bracket.
+fn parse_codes(list: &str) -> Result<Vec<&str>, ParseErrorKind> {
+    let mut codes = Vec::new();
+    let mut rest = list.trim_start();
+    loop {
+        if rest.is_empty() {
+            return Err(ParseErrorKind::MissingBracket);
         }
-        rest = rest.strip_prefix(part)?;
+        if rest.starts_with(']') {
+            break;
+        }
+        let (code, after) = rest.split_at(code_len(rest));
+        if code.is_empty() {
+            return Err(ParseErrorKind::InvalidCode);
+        }
+        codes.push(code);
+        rest = after.trim_start();
+        match rest.strip_prefix(',') {
+            Some(after_comma) => rest = after_comma.trim_start(),
+            None if rest.starts_with(']') => break,
+            None if rest.is_empty() => return Err(ParseErrorKind::MissingBracket),
+            None => return Err(ParseErrorKind::MissingComma),
+        }
     }
-    let rest = rest.trim_end().trim_end_matches('-').trim_end();
-    match rest.as_bytes().first() {
-        None => Some(DirectiveMatch::Bare),
-        Some(byte) if byte.is_ascii_whitespace() => Some(DirectiveMatch::Bare),
-        Some(b'[') => rest[1..]
-            .split_once(']')
-            .map(|(codes, _reason)| DirectiveMatch::Codes(codes)),
-        Some(_) => None,
+    if codes.is_empty() {
+        return Err(ParseErrorKind::MissingCodes);
     }
+    Ok(codes)
+}
+
+/// How far a code runs from the start of `text`: a letter, then letters, digits, `_`, `-`,
+/// or a `:` tolerated so `lint:code` still reads as one code.
+fn code_len(text: &str) -> usize {
+    let mut chars = text.char_indices();
+    if !chars.next().is_some_and(|(_, c)| c.is_alphabetic()) {
+        return 0;
+    }
+    chars
+        .find(|(_, c)| !(c.is_alphanumeric() || matches!(c, '_' | '-' | ':')))
+        .map_or(text.len(), |(index, _)| index)
 }
 
 /// Whether `comment` matches the configured `directive`: a bare entry such as
@@ -427,25 +492,18 @@ pub fn matches_directive(comment: &str, directive: &str) -> bool {
         },
         None => (directive, None),
     };
-    match (match_directive(comment, name), required) {
-        (Some(DirectiveMatch::Bare), None) => true,
-        (Some(matched @ DirectiveMatch::Codes(_)), Some(code)) => {
-            matched.codes().any(|listed| listed == code)
-        }
+    // `markup-fmt:ignore` splits into a namespace and a keyword, `markup-fmt-ignore` is all keyword.
+    let (namespace, keyword) = name.rsplit_once(':').unwrap_or(("", name));
+    match (parse_directive(comment, namespace, &[keyword]), required) {
+        (Some(Ok(parsed)), None) => parsed.codes.is_empty(),
+        (Some(Ok(parsed)), Some(code)) => parsed.codes.contains(&code),
         _ => false,
     }
 }
 
-/// Whether a comment's content is a bare `directive`, carrying no code list.
-pub fn starts_with_directive(comment: &str, directive: &str) -> bool {
-    matches!(
-        match_directive(comment, directive),
-        Some(DirectiveMatch::Bare)
-    )
-}
-
 #[cfg(test)]
 mod tests {
+    use super::ParseErrorKind;
     use rstest::rstest;
     use std::iter;
 
@@ -468,7 +526,7 @@ mod tests {
         )]
         comment: &str,
     ) {
-        assert!(super::starts_with_directive(comment, "markup-fmt:ignore"));
+        assert!(super::matches_directive(comment, "markup-fmt:ignore"));
     }
 
     #[rstest]
@@ -490,18 +548,37 @@ mod tests {
         )]
         comment: &str,
     ) {
-        assert!(!super::starts_with_directive(comment, "markup-fmt:ignore"));
+        assert!(!super::matches_directive(comment, "markup-fmt:ignore"));
     }
 
     #[rstest]
     #[case::single("markup-fmt:ignore[a]", vec!["a"])]
     #[case::several("markup-fmt : ignore[a, b ,c]", vec!["a", "b", "c"])]
+    #[case::spaced_list("markup-fmt:ignore [a]", vec!["a"])]
+    #[case::trailing_comma("markup-fmt:ignore[a,]", vec!["a"])]
     #[case::reason("markup-fmt:ignore[a]: why not", vec!["a"])]
     #[case::markers("- markup-fmt:ignore[a] -", vec!["a"])]
-    #[case::separators_only("markup-fmt:ignore[ , ]", vec![])]
+    #[case::bare_with_reason("markup-fmt:ignore why [not]", vec![])]
     fn directive_code_lists(#[case] comment: &str, #[case] expected: Vec<&str>) {
-        let matched = super::match_directive(comment, "markup-fmt:ignore").expect("a directive");
-        assert_eq!(matched.codes().collect::<Vec<_>>(), expected);
+        let parsed = super::parse_directive(comment, "markup-fmt", &["ignore"]);
+        assert_eq!(
+            parsed.expect("a directive").expect("well formed").codes,
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case::unknown_keyword("markup-fmt:ignor[a]", ParseErrorKind::UnknownKeyword)]
+    #[case::empty_list("markup-fmt:ignore[]", ParseErrorKind::MissingCodes)]
+    #[case::unclosed_list("markup-fmt:ignore[a", ParseErrorKind::MissingBracket)]
+    #[case::missing_comma("markup-fmt:ignore[a b]", ParseErrorKind::MissingComma)]
+    #[case::separators_only("markup-fmt:ignore[ , ]", ParseErrorKind::InvalidCode)]
+    #[case::numeric_code("markup-fmt:ignore[1x]", ParseErrorKind::InvalidCode)]
+    fn malformed_directives(#[case] comment: &str, #[case] expected: ParseErrorKind) {
+        assert_eq!(
+            super::parse_directive(comment, "markup-fmt", &["ignore"]),
+            Some(Err(expected))
+        );
     }
 
     #[rstest]
@@ -511,25 +588,24 @@ mod tests {
     #[case("markup-fmt:ignore", "markup-fmt:ignore[format]", false)]
     // A code entry matches on membership, whatever the order or spacing.
     #[case("markup-fmt:ignore[format]", "markup-fmt:ignore[format]", true)]
+    #[case("markup-fmt:ignore [format]", "markup-fmt:ignore[format]", true)]
     #[case("markup-fmt:ignore[ format ]", "markup-fmt:ignore[format]", true)]
     #[case("markup-fmt:ignore[a, format]", "markup-fmt:ignore[format]", true)]
     #[case("markup-fmt:ignore[format, a]", "markup-fmt:ignore[format]", true)]
     #[case("markup-fmt:ignore[a]", "markup-fmt:ignore[format]", false)]
+    // A malformed list is no directive at all, so it cannot opt a node out.
+    #[case("markup-fmt:ignore[format", "markup-fmt:ignore[format]", false)]
+    #[case("markup-fmt:ignore[format", "markup-fmt:ignore", false)]
+    // A colon-less entry is a keyword on its own.
+    #[case("markup-fmt-ignore", "markup-fmt-ignore", true)]
+    #[case("markup-fmt-ignore-file", "markup-fmt-ignore", false)]
+    #[case("markup-fmt-ignore[format]", "markup-fmt-ignore[format]", true)]
     fn configured_directive_entries(
         #[case] comment: &str,
         #[case] configured: &str,
         #[case] expected: bool,
     ) {
         assert_eq!(super::matches_directive(comment, configured), expected);
-    }
-
-    /// An unterminated list is not a directive at all, so it cannot opt a node out.
-    #[test]
-    fn unterminated_code_list() {
-        assert_eq!(
-            super::match_directive("markup-fmt:ignore[a", "markup-fmt:ignore"),
-            None
-        );
     }
 
     #[test]
