@@ -699,7 +699,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                     if is_script_indent {
                         state.indent_level += 1;
                     }
-                    match type_attr.as_deref() {
+                    let code = match type_attr.as_deref() {
                         Some(
                             "module"
                             | "application/javascript"
@@ -766,14 +766,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                                     Some(ctx.indent_width),
                                 ))
                             };
-                            docs.push(
-                                if is_script_indent {
-                                    doc.nest(ctx.indent_width)
-                                } else {
-                                    doc
-                                }
-                                .append(Doc::hard_line()),
-                            );
+                            Some(doc)
                         }
                         Some(
                             "importmap"
@@ -783,23 +776,20 @@ impl<'s> DocGen<'s> for Element<'s> {
                             | "speculationrules",
                         ) => {
                             let formatted = ctx.format_json(text_node.raw, text_node.start, &state);
-                            let doc =
-                                Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true));
-                            docs.push(
-                                if is_script_indent {
-                                    doc.nest(ctx.indent_width)
-                                } else {
-                                    doc
-                                }
-                                .append(Doc::hard_line()),
-                            );
+                            Some(
+                                Doc::hard_line().concat(reflow_with_indent(formatted.trim(), true)),
+                            )
                         }
-                        // Unknown types hold templates, not code: keep the body verbatim
-                        // like `<pre>` and only break before `</script>` if the source did.
-                        Some(..) => {
-                            docs.push(format_raw_content(text_node.raw, true));
+                        Some(..) => None,
+                    };
+                    docs.push(match code {
+                        Some(code) if is_script_indent => {
+                            code.nest(ctx.indent_width).append(Doc::hard_line())
                         }
-                    }
+                        Some(code) => code.append(Doc::hard_line()),
+                        // Unknown types usually hold templates, not code: keep the body verbatim like `<pre>`.
+                        None => format_raw_content(text_node.raw, true),
+                    });
                 }
             }
         } else if tag_name.eq_ignore_ascii_case("style") && ctx.language != Language::Xml {
@@ -1024,24 +1014,20 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
         let first_tag = match self.body.first() {
-            Some(JinjaTagOrChildren::Tag(tag)) => Some(tag),
+            Some(JinjaTagOrChildren::Tag(tag)) => Some((tag, parse_jinja_tag_name(tag))),
             _ => None,
         };
-        let is_raw_content_block = first_tag.is_some_and(|tag| {
-            matches!(ctx.language, Language::Django)
-                && matches!(parse_jinja_tag_name(tag), "comment" | "verbatim")
-        });
         // An untrimmed translation body is the gettext msgid, so every byte of it,
-        // the line break before the closing tag included, must survive formatting.
-        let is_untrimmed_translation_block = first_tag.is_some_and(|tag| {
-            matches!(
-                (ctx.language, parse_jinja_tag_name(tag)),
-                (Language::Django, "blocktrans" | "blocktranslate") | (Language::Jinja, "trans")
-            ) && !tag
+        // the closing tag's indentation included, must survive formatting.
+        // See https://docs.djangoproject.com/en/6.1/topics/i18n/translation/#blocktranslate-template-tag
+        let is_untrimmed_translation_block = match (ctx.language, first_tag) {
+            (Language::Django, Some((tag, "blocktrans" | "blocktranslate")))
+            | (Language::Jinja, Some((tag, "trans"))) => !tag
                 .content
                 .split_ascii_whitespace()
-                .any(|token| token == "trimmed")
-        });
+                .any(|token| token == "trimmed"),
+            _ => false,
+        };
 
         Doc::list(
             self.body
@@ -1049,7 +1035,10 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                 .map(|child| match child {
                     JinjaTagOrChildren::Tag(tag) => tag.doc(ctx, state),
                     JinjaTagOrChildren::Children(children) => {
-                        if is_raw_content_block {
+                        if matches!(
+                            (ctx.language, first_tag),
+                            (Language::Django, Some((_, "comment" | "verbatim")))
+                        ) {
                             Doc::list(
                                 children
                                     .iter()

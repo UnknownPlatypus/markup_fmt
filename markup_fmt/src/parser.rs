@@ -1084,7 +1084,8 @@ impl<'s> Parser<'s> {
                             attrs.push(Attribute::JsComment(self.parse_js_comment()?));
                         }
                         _ => {
-                            // HTML ignores whitespace between the `/` and the `>`, as in `<br/ >`.
+                            // Browsers tolerate whitespace between the `/` and the `>`.
+                            // `<br/ >` is handled like `<br />` or `<br>`
                             self.skip_ws();
                             if self.chars.next_if(|(_, c)| *c == '>').is_none() {
                                 return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag));
@@ -1451,8 +1452,8 @@ impl<'s> Parser<'s> {
                     }
                 }
                 Some(..) => continue,
-                // Taking the rest of the source as the comment silently swallows the markup
-                // after it, and auto-closing it with a `#}` rewrites the template.
+                // Swallowing the rest of the source as the comment loses the markup after it,
+                // and auto-closing it with a `#}` rewrites the template.
                 None => {
                     return Err(self.emit_error_with_pos(
                         SyntaxErrorKind::UnterminatedJinjaComment,

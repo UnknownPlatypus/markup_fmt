@@ -364,7 +364,7 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
 /// Why a comment addressed to a directive namespace is no directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseErrorKind {
-    /// The keyword after the namespace is none the caller honors.
+    /// The keyword after the namespace is not one the caller honors.
     UnknownKeyword,
     /// An empty `[]` list.
     MissingCodes,
@@ -396,20 +396,20 @@ pub struct Directive<'s> {
     pub codes: Vec<&'s str>,
 }
 
-/// Parse a comment body as a `namespace:keyword[code, ...]` directive, `keywords` being the
-/// ones the caller honors. `None` is a comment not addressed to `namespace` at all; an empty
-/// namespace reads a bare `keyword[code, ...]`.
+/// Parse a comment body as a `namespace:keyword[code, ...]` directive honoring `keywords`.
+/// `None` is a comment not addressed to `namespace` at all.
+/// An empty namespace reads a bare `keyword[code, ...]`.
 ///
-/// Whitespace is tolerated around the colon and before the list, a bare keyword may be
-/// followed by free text, and so may the closing bracket. Jinja's whitespace-control markers
-/// (`{#- ... -#}`) belong to the delimiter and are skipped.
+/// Whitespace is tolerated around the colon and before the list,
+/// a bare keyword may be followed by free text, and so may the closing bracket.
+/// Jinja's whitespace-control markers (`{#- ... -#}`) belong to the delimiter and are skipped.
 pub fn parse_directive<'s>(
     comment: &'s str,
     namespace: &str,
     keywords: &[&str],
 ) -> Option<Result<Directive<'s>, ParseErrorKind>> {
-    // This runs on every comment of every file, so a prose comment must fail on its first
-    // byte, before anything reads the rest of the body.
+    // This runs on every comment of every file, so a prose comment must fail on its first byte,
+    // before anything reads the rest of the body.
     let mut rest = comment
         .trim_start()
         .trim_start_matches(['-', '+'])
@@ -428,14 +428,11 @@ pub fn parse_directive<'s>(
     if !keywords.contains(&keyword) {
         return Some(Err(ParseErrorKind::UnknownKeyword));
     }
-    let codes = match rest.trim_start().strip_prefix('[') {
-        Some(list) => match parse_codes(list) {
-            Ok(codes) => codes,
-            Err(error) => return Some(Err(error)),
-        },
-        None => Vec::new(),
-    };
-    Some(Ok(Directive { keyword, codes }))
+    let codes = rest
+        .trim_start()
+        .strip_prefix('[')
+        .map_or(Ok(Vec::new()), parse_codes);
+    Some(codes.map(|codes| Directive { keyword, codes }))
 }
 
 /// The codes of a `[...]` list, `list` starting right after the bracket.
