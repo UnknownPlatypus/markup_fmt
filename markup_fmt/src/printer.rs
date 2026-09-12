@@ -3,7 +3,7 @@ use crate::{
     ast::*,
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
-    helpers,
+    helpers::{self, MaskedPiece},
     parser::parse_as_interpolated,
     state::State,
 };
@@ -812,24 +812,34 @@ impl<'s> DocGen<'s> for Element<'s> {
                     let (statics, dynamics) =
                         parse_as_interpolated(text_node.raw, text_node.start, ctx.language, false);
                     const PLACEHOLDER: &str = "_saya0909_";
-                    let masked = statics.join(PLACEHOLDER);
+                    let masked = helpers::mask_interpolations(&statics, PLACEHOLDER);
                     let formatted = ctx.format_style(&masked, lang, text_node.start, &state);
                     let doc = Doc::hard_line().concat(reflow_with_indent(
-                        formatted
-                            .split(PLACEHOLDER)
-                            .map(Cow::from)
-                            .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
-                                Language::Jinja => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_jinja(expr, *start, true, &state),
-                                )),
-                                Language::Vento => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_expr(expr, false, *start),
-                                )),
-                                Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                                _ => unreachable!(),
-                            }))
+                        helpers::unmask_interpolations(&formatted, PLACEHOLDER)
+                            .into_iter()
+                            .map(|piece| {
+                                let (expr, start) = match piece {
+                                    MaskedPiece::Static(text) => return Cow::from(text),
+                                    // An unterminated `{{` leaves a trailing static with no
+                                    // interpolation for its slot.
+                                    MaskedPiece::Dynamic(index) => match dynamics.get(index) {
+                                        Some(&dynamic) => dynamic,
+                                        None => return Cow::from(""),
+                                    },
+                                };
+                                match ctx.language {
+                                    Language::Jinja => Cow::from(format!(
+                                        "{{{{ {} }}}}",
+                                        ctx.format_jinja(expr, start, true, &state),
+                                    )),
+                                    Language::Vento => Cow::from(format!(
+                                        "{{{{ {} }}}}",
+                                        ctx.format_expr(expr, false, start),
+                                    )),
+                                    Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                                    _ => unreachable!(),
+                                }
+                            })
                             .collect::<String>()
                             .trim(),
                         lang != "sass",
@@ -1251,28 +1261,39 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 let (statics, dynamics) =
                     parse_as_interpolated(&value, value_start, ctx.language, true);
                 const PLACEHOLDER: &str = "_mnk0430_";
-                let formatted =
-                    ctx.format_style_attr(&statics.join(PLACEHOLDER), value_start, state);
+                let formatted = ctx.format_style_attr(
+                    &helpers::mask_interpolations(&statics, PLACEHOLDER),
+                    value_start,
+                    state,
+                );
                 quote = compute_attr_value_quote(&formatted, self.quote, ctx);
                 docs.push(Doc::text(
-                    formatted
-                        .split(PLACEHOLDER)
-                        .map(Cow::from)
-                        .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
-                            Language::Svelte => {
-                                Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, *start),))
+                    helpers::unmask_interpolations(&formatted, PLACEHOLDER)
+                        .into_iter()
+                        .map(|piece| {
+                            let (expr, start) = match piece {
+                                MaskedPiece::Static(text) => return Cow::from(text),
+                                MaskedPiece::Dynamic(index) => match dynamics.get(index) {
+                                    Some(&dynamic) => dynamic,
+                                    None => return Cow::from(""),
+                                },
+                            };
+                            match ctx.language {
+                                Language::Svelte => {
+                                    Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, start)))
+                                }
+                                Language::Jinja => Cow::from(format!(
+                                    "{{{{ {} }}}}",
+                                    ctx.format_jinja(expr, start, true, state),
+                                )),
+                                Language::Vento => Cow::from(format!(
+                                    "{{{{ {} }}}}",
+                                    ctx.format_expr(expr, true, start),
+                                )),
+                                Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                                _ => unreachable!(),
                             }
-                            Language::Jinja => Cow::from(format!(
-                                "{{{{ {} }}}}",
-                                ctx.format_jinja(expr, *start, true, state),
-                            )),
-                            Language::Vento => Cow::from(format!(
-                                "{{{{ {} }}}}",
-                                ctx.format_expr(expr, true, *start),
-                            )),
-                            Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                            _ => unreachable!(),
-                        }))
+                        })
                         .collect::<String>(),
                 ));
             } else if self.name.eq_ignore_ascii_case("accept")
