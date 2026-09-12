@@ -20,3 +20,10 @@
 ></div>
 
 <span   /* inline */    /* another inline */   data-one="1"></span>
+
+<em
+  // déjà
+  /* vu ☕ */
+  //
+  data-one="1"
+></em>
