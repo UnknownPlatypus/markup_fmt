@@ -3,7 +3,7 @@ use crate::{
     ast::*,
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
-    helpers::{self, MaskedPiece},
+    helpers,
     parser::{parse_as_interpolated, parse_jinja_tag_name},
     state::State,
 };
@@ -11,6 +11,9 @@ use anyhow::Error;
 use itertools::{EitherOrBoth, Itertools};
 use std::borrow::Cow;
 use tiny_pretty::Doc;
+
+/// Stands in for an interpolation while an external formatter runs over the surrounding CSS.
+const INTERPOLATION_PLACEHOLDER: &str = "_saya0909_";
 
 pub(super) trait DocGen<'s> {
     fn doc<F>(&self, ctx: &mut Ctx<'s, F>, state: &State<'s>) -> Doc<'s>
@@ -817,37 +820,18 @@ impl<'s> DocGen<'s> for Element<'s> {
                         .unwrap_or("css");
                     let (statics, dynamics) =
                         parse_as_interpolated(text_node.raw, text_node.start, ctx.language, false);
-                    const PLACEHOLDER: &str = "_saya0909_";
-                    let masked = helpers::mask_interpolations(&statics, PLACEHOLDER);
+                    let masked = helpers::mask_interpolations(&statics, INTERPOLATION_PLACEHOLDER);
                     let formatted = ctx.format_style(&masked, lang, text_node.start, &state);
                     let doc = Doc::hard_line().concat(reflow_with_indent(
-                        helpers::unmask_interpolations(&formatted, PLACEHOLDER)
-                            .into_iter()
-                            .map(|piece| {
-                                let (expr, start) = match piece {
-                                    MaskedPiece::Static(text) => return Cow::from(text),
-                                    // An unterminated `{{` leaves a trailing static with no
-                                    // interpolation for its slot.
-                                    MaskedPiece::Dynamic(index) => match dynamics.get(index) {
-                                        Some(&dynamic) => dynamic,
-                                        None => return Cow::from(""),
-                                    },
-                                };
-                                match ctx.language {
-                                    Language::Jinja | Language::Django => Cow::from(format!(
-                                        "{{{{ {} }}}}",
-                                        ctx.format_jinja(expr, start, true, &state),
-                                    )),
-                                    Language::Vento => Cow::from(format!(
-                                        "{{{{ {} }}}}",
-                                        ctx.format_expr(expr, false, start),
-                                    )),
-                                    Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                                    _ => unreachable!(),
-                                }
-                            })
-                            .collect::<String>()
-                            .trim(),
+                        restore_interpolations(
+                            &formatted,
+                            statics.len() - 1,
+                            &dynamics,
+                            false,
+                            ctx,
+                            &state,
+                        )
+                        .trim(),
                         lang != "sass",
                     ));
                     docs.push(
@@ -1371,42 +1355,20 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
             } else if self.name.eq_ignore_ascii_case("style") {
                 let (statics, dynamics) =
                     parse_as_interpolated(&value, value_start, ctx.language, true);
-                const PLACEHOLDER: &str = "_mnk0430_";
                 let formatted = ctx.format_style_attr(
-                    &helpers::mask_interpolations(&statics, PLACEHOLDER),
+                    &helpers::mask_interpolations(&statics, INTERPOLATION_PLACEHOLDER),
                     value_start,
                     state,
                 );
                 quote = compute_attr_value_quote(&formatted, self.quote, ctx);
-                docs.push(Doc::text(
-                    helpers::unmask_interpolations(&formatted, PLACEHOLDER)
-                        .into_iter()
-                        .map(|piece| {
-                            let (expr, start) = match piece {
-                                MaskedPiece::Static(text) => return Cow::from(text),
-                                MaskedPiece::Dynamic(index) => match dynamics.get(index) {
-                                    Some(&dynamic) => dynamic,
-                                    None => return Cow::from(""),
-                                },
-                            };
-                            match ctx.language {
-                                Language::Svelte => {
-                                    Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, start)))
-                                }
-                                Language::Jinja | Language::Django => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_jinja(expr, start, true, state),
-                                )),
-                                Language::Vento => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_expr(expr, true, start),
-                                )),
-                                Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                                _ => unreachable!(),
-                            }
-                        })
-                        .collect::<String>(),
-                ));
+                docs.push(Doc::text(restore_interpolations(
+                    &formatted,
+                    statics.len() - 1,
+                    &dynamics,
+                    true,
+                    ctx,
+                    state,
+                )));
             } else if self.name.eq_ignore_ascii_case("accept")
                 && !matches!(ctx.language, Language::Xml)
                 && state
@@ -2965,6 +2927,39 @@ where
             &ctx.format_stmt_header(fake_keyword, code),
             true,
         ))
+}
+
+/// Puts back the interpolations [`helpers::mask_interpolations`] replaced, formatting each
+/// expression for `ctx.language`. `attr` must match the flag given to [`parse_as_interpolated`].
+fn restore_interpolations<'s, F>(
+    formatted: &str,
+    slots: usize,
+    dynamics: &[(&str, usize)],
+    attr: bool,
+    ctx: &mut Ctx<'s, F>,
+    state: &State<'s>,
+) -> String
+where
+    F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
+{
+    let mut restored = formatted.to_owned();
+    for slot in 0..slots {
+        // An unterminated `{{` leaves a trailing static with no interpolation for its slot.
+        let rendered = match dynamics.get(slot) {
+            None => String::new(),
+            Some(&(expr, start)) => match ctx.language {
+                Language::Svelte => format!("{{{}}}", ctx.format_expr(expr, attr, start)),
+                Language::Jinja | Language::Django => {
+                    format!("{{{{ {} }}}}", ctx.format_jinja(expr, start, true, state))
+                }
+                Language::Vento => format!("{{{{ {} }}}}", ctx.format_expr(expr, attr, start)),
+                Language::Mustache => format!("{{{{{expr}}}}}"),
+                _ => unreachable!(),
+            },
+        };
+        restored = restored.replace(&format!("{INTERPOLATION_PLACEHOLDER}{slot}_"), &rendered);
+    }
+    restored
 }
 
 /// Computes the appropriate quote character (single or double) to use for an attribute value.
