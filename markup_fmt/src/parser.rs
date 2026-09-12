@@ -847,8 +847,6 @@ impl<'s> Parser<'s> {
                 _ => return Err(self.emit_error(SyntaxErrorKind::ExpectAttrValue)),
             };
 
-            // `end` is exclusive: a byte offset past the last char, so a multi-byte
-            // last char is kept whole.
             let mut end = start;
             loop {
                 match self.chars.peek() {
