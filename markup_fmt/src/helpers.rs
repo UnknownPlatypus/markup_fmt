@@ -320,6 +320,22 @@ pub(crate) fn pos_to_line_col(source: &str, pos: usize) -> (usize, usize) {
     }
 }
 
+/// Joins `statics` with numbered placeholders (`<placeholder><slot>_`), so a formatter that
+/// reorders or drops a declaration cannot shift the interpolations onto the wrong slots.
+pub(crate) fn mask_interpolations(statics: &[&str], placeholder: &str) -> String {
+    let Some((first, rest)) = statics.split_first() else {
+        return String::new();
+    };
+    let mut masked = String::from(*first);
+    for (slot, text) in rest.iter().enumerate() {
+        masked.push_str(placeholder);
+        masked.push_str(&slot.to_string());
+        masked.push('_');
+        masked.push_str(text);
+    }
+    masked
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -332,80 +348,10 @@ mod tests {
         assert_eq!(super::pos_to_line_col(source, 4), (2, 2));
         assert_eq!(super::pos_to_line_col(source, 6), (2, 4));
     }
-}
-
-/// One piece of formatter output that went through [`mask_interpolations`].
-pub(crate) enum MaskedPiece<'a> {
-    Static(&'a str),
-    /// Index of the interpolation that stood here before masking.
-    Dynamic(usize),
-}
-
-/// Joins `statics` with numbered placeholders (`<placeholder><index>_`), so a formatter that
-/// reorders or drops a declaration cannot shift the interpolations onto the wrong slots.
-pub(crate) fn mask_interpolations(statics: &[&str], placeholder: &str) -> String {
-    let mut masked = String::new();
-    for (i, text) in statics.iter().enumerate() {
-        if i > 0 {
-            masked.push_str(placeholder);
-            masked.push_str(&(i - 1).to_string());
-            masked.push('_');
-        }
-        masked.push_str(text);
-    }
-    masked
-}
-
-/// Splits `formatted` back into static text and the slot index of each placeholder.
-pub(crate) fn unmask_interpolations<'a>(formatted: &'a str, placeholder: &str) -> Vec<MaskedPiece<'a>> {
-    let mut pieces = Vec::new();
-    let mut rest = formatted;
-    while let Some(pos) = rest.find(placeholder) {
-        let after = &rest[pos + placeholder.len()..];
-        let digits = after.bytes().take_while(u8::is_ascii_digit).count();
-        match after[..digits].parse::<usize>() {
-            Ok(index) if after[digits..].starts_with('_') => {
-                pieces.push(MaskedPiece::Static(&rest[..pos]));
-                pieces.push(MaskedPiece::Dynamic(index));
-                rest = &after[digits + 1..];
-            }
-            // The formatter altered the marker, keep the text as is.
-            _ => {
-                let end = pos + placeholder.len();
-                pieces.push(MaskedPiece::Static(&rest[..end]));
-                rest = &rest[end..];
-            }
-        }
-    }
-    pieces.push(MaskedPiece::Static(rest));
-    pieces
-}
-
-#[cfg(test)]
-mod interpolation_tests {
-    use super::*;
-
-    fn unmask(formatted: &str, dynamics: &[&str]) -> String {
-        unmask_interpolations(formatted, "_ph_")
-            .into_iter()
-            .map(|piece| match piece {
-                MaskedPiece::Static(text) => text,
-                MaskedPiece::Dynamic(index) => dynamics[index],
-            })
-            .collect()
-    }
 
     #[test]
-    fn interpolations_follow_their_declaration_when_reordered() {
-        let masked = mask_interpolations(&["a: url(", "); b: ", "px"], "_ph_");
+    fn each_interpolation_gets_a_numbered_slot() {
+        let masked = super::mask_interpolations(&["a: url(", "); b: ", "px"], "_ph_");
         assert_eq!(masked, "a: url(_ph_0_); b: _ph_1_px");
-        let reordered = "b: _ph_1_px; a: url(_ph_0_)";
-        assert_eq!(unmask(reordered, &["{{ x }}", "{{ y }}"]), "b: {{ y }}px; a: url({{ x }})");
-    }
-
-    #[test]
-    fn dropped_and_adjacent_placeholders_keep_their_slots() {
-        assert_eq!(unmask("_ph_1__ph_2_", &["a", "b", "c"]), "bc");
-        assert_eq!(unmask("_ph_x _ph_0", &["a"]), "_ph_x _ph_0");
     }
 }
