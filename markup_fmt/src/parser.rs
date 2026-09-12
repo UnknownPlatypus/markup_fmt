@@ -915,6 +915,8 @@ impl<'s> Parser<'s> {
                 _ => return Err(self.emit_error(SyntaxErrorKind::ExpectAttrValue)),
             };
 
+            // `end` is exclusive: a byte offset past the last char, so a multi-byte
+            // last char is kept whole.
             let mut end = start;
             loop {
                 match self.chars.peek() {
@@ -927,7 +929,7 @@ impl<'s> Parser<'s> {
                                 | Language::Mustache
                         ) =>
                     {
-                        end = *i;
+                        let brace = *i;
                         let mut chars = self.chars.clone();
                         chars.next();
                         match chars.peek() {
@@ -936,30 +938,27 @@ impl<'s> Parser<'s> {
                                     .parse_jinja_tag_or_block(None, &mut Parser::parse_node)
                                     .is_ok() =>
                             {
-                                end = self.chars.peek().map(|(i, _)| i - 1).ok_or_else(|| {
-                                    self.emit_error(SyntaxErrorKind::ExpectAttrValue)
-                                })?;
+                                end = self.peek_pos();
                             }
                             Some((_, '{')) => {
                                 self.parse_mustache_interpolation()?;
-                                // We use inclusive range when returning string,
-                                // so we need to substract 1 here.
-                                end = self.peek_pos() - 1;
+                                end = self.peek_pos();
                             }
                             _ => {
+                                end = brace + 1;
                                 self.chars.next();
                             }
                         }
                     }
                     Some((i, c)) if is_unquoted_attr_value_char(*c) => {
-                        end = *i;
+                        end = *i + c.len_utf8();
                         self.chars.next();
                     }
                     _ => break,
                 }
             }
 
-            Ok((unsafe { self.source.get_unchecked(start..=end) }, start))
+            Ok((unsafe { self.source.get_unchecked(start..end) }, start))
         }
     }
 
