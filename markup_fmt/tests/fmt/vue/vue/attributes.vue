@@ -64,5 +64,6 @@
   @click="a['b'];"
   @click="a[null];"
   #default="{foo:{bar:{baz}}}"
+  v-café="x"
 ></div>
 </template>
