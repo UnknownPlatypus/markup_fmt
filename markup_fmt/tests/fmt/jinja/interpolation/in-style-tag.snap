@@ -1,7 +1,0 @@
----
-source: markup_fmt/tests/fmt.rs
----
-<style>
-.a { color: {{ fg }}; background: {{ bg }} }
-.b { margin: {{ m }}px {{ m2 }}px; padding: 0 }
-</style>
