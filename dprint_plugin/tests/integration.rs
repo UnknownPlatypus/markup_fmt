@@ -16,8 +16,6 @@ fn integration_with_dprint_ts_snapshot() {
             Err(e) if e.kind() == io::ErrorKind::NotFound => Default::default(),
             Err(e) => panic!("{e}"),
         };
-        // A `[malva]` table in the fixture config reaches the CSS formatter as-is, so a fixture
-        // can turn on behavior markup_fmt has to survive, such as `declarationOrder`.
         let style_config: ConfigKeyMap = fs::read_to_string(path.with_extension("toml"))
             .ok()
             .and_then(|file| {
