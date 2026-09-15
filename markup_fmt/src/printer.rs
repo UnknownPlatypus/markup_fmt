@@ -4,7 +4,7 @@ use crate::{
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
     helpers,
-    parser::{parse_as_interpolated, parse_jinja_tag_name},
+    parser::{parse_as_interpolated, parse_jinja_tag_name, strip_jinja_whitespace_control},
     state::State,
 };
 use anyhow::Error;
@@ -2953,12 +2953,24 @@ where
         let (slot, text) = piece.split_once('_').unwrap_or(("", piece));
         // A slot without an interpolation comes from an unterminated `{{`; it renders as nothing.
         if let Some(&(expr, start)) = slot.parse().ok().and_then(|slot: usize| dynamics.get(slot)) {
+            // The masked expression still carries the whitespace control the parser strips off
+            // the interpolations it builds into nodes itself.
+            let (expr, trim_prev, trim_next, start) = match ctx.language {
+                Language::Jinja | Language::Vento => strip_jinja_whitespace_control(expr, start),
+                _ => (expr, false, false, start),
+            };
+            let prev = if trim_prev { "-" } else { "" };
+            let next = if trim_next { "-" } else { "" };
             restored.push_str(&match ctx.language {
                 Language::Svelte => format!("{{{}}}", ctx.format_expr(expr, attr, start)),
-                Language::Jinja | Language::Django => {
-                    format!("{{{{ {} }}}}", ctx.format_jinja(expr, start, true, state))
-                }
-                Language::Vento => format!("{{{{ {} }}}}", ctx.format_expr(expr, attr, start)),
+                Language::Jinja | Language::Django => format!(
+                    "{{{{{prev} {} {next}}}}}",
+                    ctx.format_jinja(expr, start, true, state)
+                ),
+                Language::Vento => format!(
+                    "{{{{{prev} {} {next}}}}}",
+                    ctx.format_expr(expr, attr, start)
+                ),
                 Language::Mustache => format!("{{{{{expr}}}}}"),
                 _ => unreachable!(),
             });
