@@ -1,0 +1,7 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<div style="color: {{- fg }}; margin: {{ m -}}">a</div>
+<style>
+.theme { color: {{- fg -}}; }
+</style>

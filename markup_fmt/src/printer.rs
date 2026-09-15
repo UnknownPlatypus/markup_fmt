@@ -4,7 +4,7 @@ use crate::{
     config::{Quotes, ScriptFormatter, VSlotStyle, VueComponentCase, WhitespaceSensitivity},
     ctx::{Ctx, Hints},
     helpers,
-    parser::parse_as_interpolated,
+    parser::{parse_as_interpolated, strip_jinja_whitespace_control},
     state::State,
 };
 use anyhow::Error;
@@ -818,17 +818,29 @@ impl<'s> DocGen<'s> for Element<'s> {
                         formatted
                             .split(PLACEHOLDER)
                             .map(Cow::from)
-                            .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
-                                Language::Jinja => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_jinja(expr, *start, true, &state),
-                                )),
-                                Language::Vento => Cow::from(format!(
-                                    "{{{{ {} }}}}",
-                                    ctx.format_expr(expr, false, *start),
-                                )),
-                                Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                                _ => unreachable!(),
+                            .interleave(dynamics.iter().map(|(expr, start)| {
+                                // The masked expression still carries the whitespace control the
+                                // parser strips off the interpolations it builds into nodes.
+                                let (expr, trim_prev, trim_next, start) = match ctx.language {
+                                    Language::Jinja | Language::Vento => {
+                                        strip_jinja_whitespace_control(expr, *start)
+                                    }
+                                    _ => (*expr, false, false, *start),
+                                };
+                                let prev = if trim_prev { "-" } else { "" };
+                                let next = if trim_next { "-" } else { "" };
+                                match ctx.language {
+                                    Language::Jinja => Cow::from(format!(
+                                        "{{{{{prev} {} {next}}}}}",
+                                        ctx.format_jinja(expr, start, true, &state),
+                                    )),
+                                    Language::Vento => Cow::from(format!(
+                                        "{{{{{prev} {} {next}}}}}",
+                                        ctx.format_expr(expr, false, start),
+                                    )),
+                                    Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                                    _ => unreachable!(),
+                                }
                             }))
                             .collect::<String>()
                             .trim(),
@@ -1258,20 +1270,32 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                     formatted
                         .split(PLACEHOLDER)
                         .map(Cow::from)
-                        .interleave(dynamics.iter().map(|(expr, start)| match ctx.language {
-                            Language::Svelte => {
-                                Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, *start),))
+                        .interleave(dynamics.iter().map(|(expr, start)| {
+                            // The masked expression still carries the whitespace control the
+                            // parser strips off the interpolations it builds into nodes.
+                            let (expr, trim_prev, trim_next, start) = match ctx.language {
+                                Language::Jinja | Language::Vento => {
+                                    strip_jinja_whitespace_control(expr, *start)
+                                }
+                                _ => (*expr, false, false, *start),
+                            };
+                            let prev = if trim_prev { "-" } else { "" };
+                            let next = if trim_next { "-" } else { "" };
+                            match ctx.language {
+                                Language::Svelte => {
+                                    Cow::from(format!("{{{}}}", ctx.format_expr(expr, true, start)))
+                                }
+                                Language::Jinja => Cow::from(format!(
+                                    "{{{{{prev} {} {next}}}}}",
+                                    ctx.format_jinja(expr, start, true, state),
+                                )),
+                                Language::Vento => Cow::from(format!(
+                                    "{{{{{prev} {} {next}}}}}",
+                                    ctx.format_expr(expr, true, start),
+                                )),
+                                Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
+                                _ => unreachable!(),
                             }
-                            Language::Jinja => Cow::from(format!(
-                                "{{{{ {} }}}}",
-                                ctx.format_jinja(expr, *start, true, state),
-                            )),
-                            Language::Vento => Cow::from(format!(
-                                "{{{{ {} }}}}",
-                                ctx.format_expr(expr, true, *start),
-                            )),
-                            Language::Mustache => Cow::from(format!("{{{{{expr}}}}}")),
-                            _ => unreachable!(),
                         }))
                         .collect::<String>(),
                 ));

@@ -1639,21 +1639,11 @@ impl<'s> Parser<'s> {
                                         NodeKind::VueInterpolation(VueInterpolation { expr, start })
                                     }
                                     Language::Jinja => {
-                                        let (trim_prev, expr) =
-                                            if let Some(rest) = expr.strip_prefix('-') {
-                                                (true, rest)
-                                            } else {
-                                                (false, expr)
-                                            };
-                                        let (trim_next, expr) =
-                                            if let Some(rest) = expr.strip_suffix('-') {
-                                                (true, rest)
-                                            } else {
-                                                (false, expr)
-                                            };
+                                        let (expr, trim_prev, trim_next, start) =
+                                            strip_jinja_whitespace_control(expr, start);
                                         NodeKind::JinjaInterpolation(JinjaInterpolation {
                                             expr,
-                                            start: if trim_prev { start + 1 } else { start },
+                                            start,
                                             trim_prev,
                                             trim_next,
                                         })
@@ -2590,19 +2580,8 @@ impl<'s> Parser<'s> {
         {
             first_tag
         } else {
-            let (mut first_tag, mut start) = self.parse_mustache_interpolation()?;
-            let mut trim_prev = false;
-            let mut trim_next = false;
-            if let Some(tag) = first_tag.strip_prefix('-') {
-                first_tag = tag;
-                trim_prev = true;
-                start += 1;
-            }
-            if let Some(tag) = first_tag.strip_suffix('-') {
-                first_tag = tag;
-                trim_next = true;
-            }
-            (first_tag, trim_prev, trim_next, start)
+            let (first_tag, start) = self.parse_mustache_interpolation()?;
+            strip_jinja_whitespace_control(first_tag, start)
         };
 
         if let Some(raw) = first_tag
@@ -2642,19 +2621,9 @@ impl<'s> Parser<'s> {
                         body.push(VentoTagOrChildren::Children(children));
                     }
                 }
-                if let Ok((mut next_tag, mut next_tag_start)) = self.parse_mustache_interpolation()
-                {
-                    let mut trim_prev = false;
-                    let mut trim_next = false;
-                    if let Some(tag) = next_tag.strip_prefix('-') {
-                        next_tag = tag;
-                        trim_prev = true;
-                        next_tag_start += 1;
-                    };
-                    if let Some(tag) = next_tag.strip_suffix('-') {
-                        next_tag = tag;
-                        trim_next = true;
-                    };
+                if let Ok((next_tag, next_tag_start)) = self.parse_mustache_interpolation() {
+                    let (next_tag, trim_prev, trim_next, next_tag_start) =
+                        strip_jinja_whitespace_control(next_tag, next_tag_start);
                     let (next_tag_name, _) = helpers::parse_vento_tag(next_tag);
                     if next_tag_name
                         .trim()
@@ -2870,6 +2839,25 @@ fn strip_hbs_whitespace_control(text: &str) -> (&str, bool, bool) {
         (text, false)
     };
     (text, before, after)
+}
+
+/// Strips the `{{-` / `-}}` whitespace control Jinja and Vento share, moving `start` past a
+/// leading marker.
+pub(crate) fn strip_jinja_whitespace_control(
+    text: &str,
+    start: usize,
+) -> (&str, bool, bool, usize) {
+    let (text, before, start) = if let Some(stripped) = text.strip_prefix('-') {
+        (stripped, true, start + 1)
+    } else {
+        (text, false, start)
+    };
+    let (text, after) = if let Some(stripped) = text.strip_suffix('-') {
+        (stripped, true)
+    } else {
+        (text, false)
+    };
+    (text, before, after, start)
 }
 
 pub type PResult<T> = Result<T, SyntaxError>;
