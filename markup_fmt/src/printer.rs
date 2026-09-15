@@ -751,20 +751,30 @@ impl<'s> DocGen<'s> for Element<'s> {
                                 Language::Jinja | Language::Mustache | Language::Vento
                             ) {
                                 ctx.try_format_script(text_node.raw, lang, text_node.start, &state)
-                                    .unwrap_or_else(|_| Cow::from(text_node.raw))
+                                    .ok()
                             } else {
-                                ctx.format_script(text_node.raw, lang, text_node.start, &state)
-                            };
-                            let doc = if matches!(
-                                ctx.options.script_formatter,
-                                Some(ScriptFormatter::Dprint)
-                            ) {
-                                Doc::hard_line().concat(reflow_owned(formatted.trim()))
-                            } else {
-                                Doc::hard_line().concat(dedent_and_reflow(
-                                    formatted.trim(),
-                                    Some(ctx.indent_width),
+                                Some(ctx.format_script(
+                                    text_node.raw,
+                                    lang,
+                                    text_node.start,
+                                    &state,
                                 ))
+                            };
+                            let doc = match formatted {
+                                // Only code dprint accepted is already at the file indent level.
+                                Some(formatted)
+                                    if matches!(
+                                        ctx.options.script_formatter,
+                                        Some(ScriptFormatter::Dprint)
+                                    ) =>
+                                {
+                                    Doc::hard_line().concat(reflow_owned(formatted.trim()))
+                                }
+                                // Rejected code is raw text, so it may be tab-indented.
+                                formatted => Doc::hard_line().concat(dedent_and_reflow(
+                                    formatted.as_deref().unwrap_or(text_node.raw).trim(),
+                                    Some(ctx.indent_width),
+                                )),
                             };
                             Some(doc)
                         }
