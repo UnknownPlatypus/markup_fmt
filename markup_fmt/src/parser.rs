@@ -927,7 +927,7 @@ impl<'s> Parser<'s> {
                                 | Language::Mustache
                         ) =>
                     {
-                        end = *i;
+                        let brace = *i;
                         let mut chars = self.chars.clone();
                         chars.next();
                         match chars.peek() {
@@ -936,30 +936,27 @@ impl<'s> Parser<'s> {
                                     .parse_jinja_tag_or_block(None, &mut Parser::parse_node)
                                     .is_ok() =>
                             {
-                                end = self.chars.peek().map(|(i, _)| i - 1).ok_or_else(|| {
-                                    self.emit_error(SyntaxErrorKind::ExpectAttrValue)
-                                })?;
+                                end = self.peek_pos();
                             }
                             Some((_, '{')) => {
                                 self.parse_mustache_interpolation()?;
-                                // We use inclusive range when returning string,
-                                // so we need to substract 1 here.
-                                end = self.peek_pos() - 1;
+                                end = self.peek_pos();
                             }
                             _ => {
+                                end = brace + 1;
                                 self.chars.next();
                             }
                         }
                     }
                     Some((i, c)) if is_unquoted_attr_value_char(*c) => {
-                        end = *i;
+                        end = *i + c.len_utf8();
                         self.chars.next();
                     }
                     _ => break,
                 }
             }
 
-            Ok((unsafe { self.source.get_unchecked(start..=end) }, start))
+            Ok((unsafe { self.source.get_unchecked(start..end) }, start))
         }
     }
 
@@ -1300,16 +1297,16 @@ impl<'s> Parser<'s> {
             c.is_ascii_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() || c == '\\'
         }
 
-        let Some((start, _)) = self.chars.next_if(|(_, c)| is_identifier_char(*c)) else {
+        let Some((start, start_char)) = self.chars.next_if(|(_, c)| is_identifier_char(*c)) else {
             return Err(self.emit_error(SyntaxErrorKind::ExpectIdentifier));
         };
-        let mut end = start;
+        let mut end = start + start_char.len_utf8();
 
-        while let Some((i, _)) = self.chars.next_if(|(_, c)| is_identifier_char(*c)) {
-            end = i;
+        while let Some((_, c)) = self.chars.next_if(|(_, c)| is_identifier_char(*c)) {
+            end += c.len_utf8();
         }
 
-        unsafe { Ok(self.source.get_unchecked(start..=end)) }
+        unsafe { Ok(self.source.get_unchecked(start..end)) }
     }
 
     /// This will consume the open and close char.
@@ -1655,24 +1652,22 @@ impl<'s> Parser<'s> {
             loop {
                 match self.chars.next() {
                     Some((_, '\n')) | None => break,
-                    Some((i, _)) => end = i,
+                    Some((i, c)) => end = i + c.len_utf8(),
                 }
             }
             Ok(JsComment {
                 block: false,
-                raw: unsafe { self.source.get_unchecked(start..=end) },
+                raw: unsafe { self.source.get_unchecked(start..end) },
             })
         } else {
             let mut end = start;
             loop {
                 match self.chars.next() {
-                    Some((i, '*')) => {
+                    Some((i, '*')) if self.chars.next_if(|(_, c)| *c == '/').is_some() => {
                         end = i;
-                        if self.chars.next_if(|(_, c)| *c == '/').is_some() {
-                            break;
-                        }
+                        break;
                     }
-                    Some((i, _)) => end = i,
+                    Some((i, c)) => end = i + c.len_utf8(),
                     None => break,
                 }
             }
