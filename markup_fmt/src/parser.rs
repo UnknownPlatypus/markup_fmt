@@ -1793,10 +1793,7 @@ impl<'s> Parser<'s> {
                 let mut chars = self.chars.clone();
                 chars.next();
                 match chars.next() {
-                    Some((_, c))
-                        if is_html_tag_name_char(c)
-                            || is_special_tag_name_char(c, self.language) =>
-                    {
+                    Some((_, c)) if is_tag_name_start_char(c, self.language) => {
                         self.parse_element().map(NodeKind::Element)
                     }
                     Some((_, '!')) => {
@@ -2785,10 +2782,7 @@ impl<'s> Parser<'s> {
                     chars.next();
                     match chars.next() {
                         Some((_, c))
-                            if is_html_tag_name_char(c)
-                                || is_special_tag_name_char(c, self.language)
-                                || c == '/'
-                                || c == '!' =>
+                            if is_tag_name_start_char(c, self.language) || c == '/' || c == '!' =>
                         {
                             end = i;
                             break;
@@ -3082,6 +3076,12 @@ fn is_special_tag_name_char(c: char, language: Language) -> bool {
         Language::Jinja | Language::Django => c == '{',
         _ => false,
     }
+}
+
+/// Checks whether a character can start a tag name. Digits, '-' or symbols like '€' may appear
+/// inside a name but not open one, so a `<` before them is text.
+fn is_tag_name_start_char(c: char, language: Language) -> bool {
+    c.is_alphabetic() || matches!(c, '_' | ':') || is_special_tag_name_char(c, language)
 }
 
 fn is_attr_name_char(c: char) -> bool {

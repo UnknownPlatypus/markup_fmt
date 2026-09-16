@@ -1,0 +1,6 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<p>Attention (<500m)</p>
+<p>Prix (<€10)</p>
+<p>d<-e</p>
