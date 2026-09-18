@@ -61,6 +61,7 @@ pub enum SyntaxErrorKind {
     ExpectVentoBlockEnd,
     ExpectVueDirective,
     ExpectXmlDecl,
+    SelfClosingNonVoidElement(String),
     UnterminatedJinjaComment,
     UnterminatedJinjaTag,
 }
@@ -131,6 +132,9 @@ impl fmt::Display for SyntaxErrorKind {
             SyntaxErrorKind::ExpectVentoBlockEnd => "expected Vento block end".into(),
             SyntaxErrorKind::ExpectVueDirective => "expected Vue directive".into(),
             SyntaxErrorKind::ExpectXmlDecl => "expected XML declaration".into(),
+            SyntaxErrorKind::SelfClosingNonVoidElement(tag_name) => {
+                format!("non-void HTML element <{tag_name}> cannot be self-closing").into()
+            }
             SyntaxErrorKind::UnterminatedJinjaComment => {
                 "unterminated comment, expected a closing `#}`".into()
             }

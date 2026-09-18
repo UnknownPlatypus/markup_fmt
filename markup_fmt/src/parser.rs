@@ -35,6 +35,8 @@ pub struct Parser<'s> {
     custom_blocks: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     jinja_comments: Vec<&'s str>,
+    /// Inside `<svg>`/`<math>`, where HTML-named tags like `<a/>` legitimately self-close.
+    in_foreign_content: bool,
 }
 
 impl<'s> Parser<'s> {
@@ -45,6 +47,7 @@ impl<'s> Parser<'s> {
             custom_blocks,
             chars: source.char_indices().peekable(),
             jinja_comments: Vec::new(),
+            in_foreign_content: false,
         }
     }
 
@@ -1069,6 +1072,9 @@ impl<'s> Parser<'s> {
         };
         let tag_name = self.parse_tag_name()?;
         let void_element = helpers::is_void_element(tag_name, self.language);
+        // `<svg/>` and `<math/>` themselves self-close in browsers, unlike other HTML tags.
+        let foreign_root =
+            tag_name.eq_ignore_ascii_case("svg") || tag_name.eq_ignore_ascii_case("math");
 
         let mut attrs = vec![];
         let mut first_attr_same_line = true;
@@ -1086,6 +1092,19 @@ impl<'s> Parser<'s> {
                             self.skip_ws();
                             if self.chars.next_if(|(_, c)| *c == '>').is_none() {
                                 return Err(self.emit_error(SyntaxErrorKind::ExpectSelfCloseTag));
+                            }
+                            // Browsers drop the `/` on non-void HTML elements, so `<div/>text`
+                            // renders as `<div>text</div>`. Reject rather than silently mis-nest.
+                            if !void_element
+                                && !foreign_root
+                                && !self.in_foreign_content
+                                && matches!(self.language, Language::Jinja | Language::Django)
+                                && helpers::is_html_tag(tag_name, self.language)
+                            {
+                                return Err(self.emit_error_with_pos(
+                                    SyntaxErrorKind::SelfClosingNonVoidElement(tag_name.into()),
+                                    element_start,
+                                ));
                             }
                             return Ok(Element {
                                 tag_name,
@@ -1144,6 +1163,8 @@ impl<'s> Parser<'s> {
             }
         }
 
+        let outer_foreign_content = self.in_foreign_content;
+        self.in_foreign_content |= foreign_root;
         loop {
             match self.chars.peek() {
                 Some((_, '<')) => {
@@ -1204,6 +1225,7 @@ impl<'s> Parser<'s> {
                 }
             }
         }
+        self.in_foreign_content = outer_foreign_content;
 
         Ok(Element {
             tag_name,
