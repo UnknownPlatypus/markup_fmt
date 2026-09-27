@@ -1548,8 +1548,11 @@ impl<'s> Parser<'s> {
         let tag_name = parse_jinja_tag_name(&first_tag, self.language);
 
         // Django's lexer emits `{% comment %}` and `{% verbatim %}` bodies as plain text,
+        // and Cotton passes `{% cotton:verbatim %}` bodies through uncompiled,
         // so nothing inside them is parsed.
-        if matches!(self.language, Language::Django) && matches!(tag_name, "comment" | "verbatim") {
+        if matches!(self.language, Language::Django)
+            && matches!(tag_name, "comment" | "verbatim" | "cotton:verbatim")
+        {
             // `{% verbatim x %}` is closed by `{% endverbatim x %}`, name included.
             let end_tail = if tag_name == "verbatim" {
                 first_tag.content.trim()
@@ -1590,7 +1593,7 @@ impl<'s> Parser<'s> {
             // Django's built-in block tags, from `django.template.defaulttags`,
             // `django.template.loader_tags` and `django.templatetags`.
             || (matches!(self.language, Language::Django)
-                && matches!(
+                && (matches!(
                     tag_name,
                     "autoescape"
                         | "block"
@@ -1610,7 +1613,9 @@ impl<'s> Parser<'s> {
                         | "spaceless"
                         | "timezone"
                         | "with"
-                ))
+                        // django-cotton, where `{% cotton … / %}` closes itself as in `cotton_component`.
+                        | "cotton:slot"
+                ) || tag_name == "cotton" && !first_tag.content.trim_end().ends_with('/')))
             || self.custom_blocks.iter().any(|s| s == tag_name)
         {
             let tag_start = first_tag.start;

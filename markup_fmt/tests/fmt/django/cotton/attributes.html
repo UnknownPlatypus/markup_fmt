@@ -1,0 +1,8 @@
+<c-button enabled=False />
+<c-input value=my_variable />
+<c-card :config="{'open': True}" only />
+<c-button url="/contact" external>Contact</c-button>
+<c-modal @click="modal = 'id-{{ date|date:"Y-m-d" }}'" />
+<c-button ::class="{'active': open}" />
+<c-box :count=total />
+<div class=foo></div>

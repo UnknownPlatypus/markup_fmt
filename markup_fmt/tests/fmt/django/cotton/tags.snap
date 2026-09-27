@@ -1,0 +1,11 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{% cotton card %}
+  {% cotton:slot header %}
+    <b>Title</b>
+  {% endcotton:slot %}
+  {% cotton icon name="x" / %}
+{% endcotton %}
+{% cotton:vars title="x" %}
+<div>{% cotton:verbatim %}<c-card>  {{ x }}{% endcotton:verbatim %}</div>

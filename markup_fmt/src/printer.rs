@@ -1034,7 +1034,10 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                     JinjaTagOrChildren::Children(children) => {
                         if matches!(
                             (ctx.language, first_tag),
-                            (Language::Django, Some((_, "comment" | "verbatim")))
+                            (
+                                Language::Django,
+                                Some((_, "comment" | "verbatim" | "cotton:verbatim"))
+                            )
                         ) {
                             Doc::list(
                                 children
@@ -1263,6 +1266,16 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
     {
         let name = Doc::text(self.name);
         if let Some((value, value_start)) = self.value {
+            // Cotton reads an unquoted value as a Python literal or variable, a quoted one as a string.
+            // Print it as written: it has no whitespace, so any reformatting would split it.
+            if self.quote.is_none()
+                && (ctx.options.preserve_unquoted_attrs
+                    || state
+                        .current_tag_name
+                        .is_some_and(|tag| helpers::is_cotton_component(tag, ctx.language)))
+            {
+                return name.append(Doc::char('=')).concat(reflow_raw(value));
+            }
             let value = match ctx.language {
                 Language::Vue => {
                     if state
@@ -1386,13 +1399,8 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
                 docs.extend(reflow_owned(&value));
             }
-            if ctx.options.preserve_unquoted_attrs && self.quote.is_none() {
-                docs.insert(2, Doc::nil());
-                docs.push(Doc::nil());
-            } else {
-                docs.insert(2, quote.clone());
-                docs.push(quote);
-            }
+            docs.insert(2, quote.clone());
+            docs.push(quote);
             Doc::list(docs)
         } else if matches!(ctx.language, Language::Svelte)
             && matches!(ctx.options.svelte_directive_shorthand, Some(false))
@@ -2508,7 +2516,10 @@ where
     }) || if let NodeKind::JinjaBlock(block) = &node.kind
         && let Some(JinjaTagOrChildren::Tag(tag)) = block.body.first()
     {
-        matches!(parse_jinja_tag_name(tag, ctx.language), "raw" | "verbatim")
+        matches!(
+            parse_jinja_tag_name(tag, ctx.language),
+            "raw" | "verbatim" | "cotton:verbatim"
+        )
     } else {
         false
     }

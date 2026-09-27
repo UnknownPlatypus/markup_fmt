@@ -129,6 +129,12 @@ pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
     }
 }
 
+/// A django-cotton component, e.g. `<c-button>`.
+/// Cotton only compiles lowercase `<c-` tags, see `django_cotton/compiler_regex.py`.
+pub(crate) fn is_cotton_component(name: &str, language: Language) -> bool {
+    language == Language::Django && name.starts_with("c-")
+}
+
 pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
     match language {
         Language::Html
