@@ -233,6 +233,10 @@ pub struct LanguageOptions {
     /// See [`customBlocks`](https://github.com/g-plane/markup_fmt/blob/main/docs/config.md#customblocks) on GitHub
     pub custom_blocks: Option<Vec<String>>,
 
+    #[cfg_attr(feature = "config_serde", serde(alias = "rawElements"))]
+    /// See [`rawElements`](https://github.com/UnknownPlatypus/markup_fmt/blob/django/baseline/docs/src/config/raw-elements.md) on GitHub
+    pub raw_elements: Vec<String>,
+
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreCommentDirective"))]
     pub ignore_comment_directive: Vec<String>,
 
@@ -285,6 +289,7 @@ impl Default for LanguageOptions {
             script_formatter: None,
             preserve_unquoted_attrs: false,
             custom_blocks: None,
+            raw_elements: vec![],
             ignore_comment_directive: vec!["markup-fmt-ignore".into()],
             ignore_file_comment_directive: vec!["markup-fmt-ignore-file".into()],
         }

@@ -845,7 +845,13 @@ impl<'s> DocGen<'s> for Element<'s> {
                     );
                 }
             }
-        } else if tag_name.eq_ignore_ascii_case("pre") || tag_name.eq_ignore_ascii_case("textarea")
+        } else if tag_name.eq_ignore_ascii_case("pre")
+            || tag_name.eq_ignore_ascii_case("textarea")
+            || ctx
+                .options
+                .raw_elements
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(tag_name))
         {
             if let [
                 Node {

@@ -28,6 +28,7 @@ where
         code,
         language,
         options.language.custom_blocks.clone().unwrap_or_default(),
+        options.language.raw_elements.clone(),
     );
     let ast = parser.parse_root().map_err(FormatError::Syntax)?;
 

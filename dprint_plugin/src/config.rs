@@ -414,6 +414,17 @@ pub(crate) fn resolve_config(
                 .map(|s| s.trim().to_string())
                 .collect(),
             ),
+            raw_elements: get_value::<String>(
+                &mut config,
+                "rawElements",
+                String::default(),
+                &mut diagnostics,
+            )
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect(),
             ignore_comment_directive: vec![get_value(
                 &mut config,
                 "ignoreCommentDirective",

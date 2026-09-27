@@ -30,6 +30,7 @@
   - [angularNextControlFlowSameLine](./config/angular-next-control-flow-same-line.md)
   - [scriptFormatter](./config/script-formatter.md)
   - [preserveUnquotedAttrs](./config/preserve-unquoted-attrs.md)
+  - [rawElements](./config/raw-elements.md)
   - [ignoreCommentDirective](./config/ignore-comment-directive.md)
   - [ignoreFileCommentDirective](./config/ignore-file-comment-directive.md)
 - [Recipes]()

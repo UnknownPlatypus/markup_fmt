@@ -33,6 +33,8 @@ pub struct Parser<'s> {
     source: &'s str,
     language: Language,
     custom_blocks: Vec<String>,
+    /// Elements whose content is kept as raw text, like `<pre>`.
+    raw_elements: Vec<String>,
     chars: Peekable<CharIndices<'s>>,
     jinja_comments: Vec<&'s str>,
     /// Inside `<svg>`/`<math>`, where HTML-named tags like `<a/>` legitimately self-close.
@@ -40,11 +42,17 @@ pub struct Parser<'s> {
 }
 
 impl<'s> Parser<'s> {
-    pub fn new(source: &'s str, language: Language, custom_blocks: Vec<String>) -> Self {
+    pub fn new(
+        source: &'s str,
+        language: Language,
+        custom_blocks: Vec<String>,
+        raw_elements: Vec<String>,
+    ) -> Self {
         Self {
             source,
             language,
             custom_blocks,
+            raw_elements,
             chars: source.char_indices().peekable(),
             jinja_comments: Vec::new(),
             in_foreign_content: false,
@@ -1147,11 +1155,15 @@ impl<'s> Parser<'s> {
         }
 
         let mut children = vec![];
-        let should_parse_raw = self.language != Language::Xml
+        let should_parse_raw = (self.language != Language::Xml
             && (tag_name.eq_ignore_ascii_case("script")
                 || tag_name.eq_ignore_ascii_case("style")
                 || tag_name.eq_ignore_ascii_case("pre")
-                || tag_name.eq_ignore_ascii_case("textarea"));
+                || tag_name.eq_ignore_ascii_case("textarea")))
+            || self
+                .raw_elements
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(tag_name));
         if should_parse_raw {
             let text_node = self.parse_raw_text_node(tag_name)?;
             let raw = text_node.raw;
