@@ -115,7 +115,7 @@ static VOID_ELEMENTS: [&str; 14] = [
     "wbr", "param",
 ];
 
-pub(crate) fn is_void_element(name: &str, language: Language) -> bool {
+pub fn is_void_element(name: &str, language: Language) -> bool {
     match language {
         Language::Html
         | Language::Jinja

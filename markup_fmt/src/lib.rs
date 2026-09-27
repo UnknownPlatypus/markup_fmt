@@ -15,7 +15,7 @@ pub use crate::{
     ctx::Hints,
     debug::debug_doc_tree,
     error::*,
-    helpers::{Directive, ParseErrorKind, matches_directive, parse_directive},
+    helpers::{Directive, ParseErrorKind, is_void_element, matches_directive, parse_directive},
     parser::Language,
 };
 use anyhow::Error;
