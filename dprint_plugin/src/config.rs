@@ -397,6 +397,17 @@ pub(crate) fn resolve_config(
                 }
             })
             .or(Some(ScriptFormatter::Dprint)),
+            raw_elements: get_value::<String>(
+                &mut config,
+                "rawElements",
+                String::default(),
+                &mut diagnostics,
+            )
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect(),
             ignore_comment_directive: get_value(
                 &mut config,
                 "ignoreCommentDirective",

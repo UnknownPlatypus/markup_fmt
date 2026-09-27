@@ -56,7 +56,7 @@ pub fn format_text<F>(
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
-    let mut parser = Parser::new(code, language);
+    let mut parser = Parser::new(code, language, options.language.raw_elements.clone());
     let ast = parser.parse_root().map_err(FormatError::Syntax)?;
 
     if ast.children.first().is_some_and(|child| {

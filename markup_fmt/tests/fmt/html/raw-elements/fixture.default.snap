@@ -1,0 +1,14 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+<c-markdown>
+# Title
+
+- item   one
+- item two
+</c-markdown>
+<div>
+  <C-Markdown class="prose" id="doc">  <p>unbalanced <b>html
+  kept   as is</C-Markdown>
+</div>
+<c-markdown></c-markdown>

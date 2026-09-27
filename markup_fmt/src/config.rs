@@ -226,6 +226,10 @@ pub struct LanguageOptions {
     #[cfg_attr(feature = "config_serde", serde(alias = "scriptFormatter"))]
     pub script_formatter: Option<ScriptFormatter>,
 
+    #[cfg_attr(feature = "config_serde", serde(alias = "rawElements"))]
+    /// Elements whose content is kept byte for byte, like `<pre>`.
+    pub raw_elements: Vec<String>,
+
     #[cfg_attr(feature = "config_serde", serde(alias = "ignoreCommentDirective"))]
     pub ignore_comment_directive: String,
 
@@ -276,6 +280,7 @@ impl Default for LanguageOptions {
             astro_attr_shorthand: None,
             angular_next_control_flow_same_line: true,
             script_formatter: None,
+            raw_elements: vec![],
             ignore_comment_directive: "markup-fmt-ignore".into(),
             ignore_file_comment_directive: "markup-fmt-ignore-file".into(),
         }
