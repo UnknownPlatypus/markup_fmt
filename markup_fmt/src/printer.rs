@@ -948,7 +948,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Attribute<'s>> {
         let in_loop = state.in_attr_loop
             || matches!(
                 self.body.first(),
-                Some(JinjaTagOrChildren::Tag(tag)) if parse_jinja_tag_name(tag) == "for"
+                Some(JinjaTagOrChildren::Tag(tag)) if parse_jinja_tag_name(tag, ctx.language) == "for"
             );
         let state = &State {
             in_attr_loop: in_loop,
@@ -1009,7 +1009,9 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
         let first_tag = match self.body.first() {
-            Some(JinjaTagOrChildren::Tag(tag)) => Some((tag, parse_jinja_tag_name(tag))),
+            Some(JinjaTagOrChildren::Tag(tag)) => {
+                Some((tag, parse_jinja_tag_name(tag, ctx.language)))
+            }
             _ => None,
         };
         // An untrimmed translation body is the gettext msgid, so every byte of it,
@@ -2506,7 +2508,7 @@ where
     }) || if let NodeKind::JinjaBlock(block) = &node.kind
         && let Some(JinjaTagOrChildren::Tag(tag)) = block.body.first()
     {
-        matches!(parse_jinja_tag_name(tag), "raw" | "verbatim")
+        matches!(parse_jinja_tag_name(tag, ctx.language), "raw" | "verbatim")
     } else {
         false
     }

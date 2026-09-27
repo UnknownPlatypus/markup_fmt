@@ -1545,7 +1545,7 @@ impl<'s> Parser<'s> {
         } else {
             self.parse_jinja_tag()?
         };
-        let tag_name = parse_jinja_tag_name(&first_tag);
+        let tag_name = parse_jinja_tag_name(&first_tag, self.language);
 
         // Django's lexer emits `{% comment %}` and `{% verbatim %}` bodies as plain text,
         // so nothing inside them is parsed.
@@ -1629,7 +1629,7 @@ impl<'s> Parser<'s> {
                 // Children only stop on `{%`, so a tag is guaranteed to be there.
                 let next_tag_start = self.peek_pos();
                 let next_tag = self.parse_jinja_tag()?;
-                let next_tag_name = parse_jinja_tag_name(&next_tag);
+                let next_tag_name = parse_jinja_tag_name(&next_tag, self.language);
                 if next_tag_name
                     .strip_prefix("end")
                     .is_some_and(|name| name == tag_name)
@@ -2659,7 +2659,7 @@ impl<'s> Parser<'s> {
 
         let mut has_name = false;
         let mut closed = false;
-        if parse_jinja_tag_name(&self.parse_jinja_tag()?) == "if" {
+        if parse_jinja_tag_name(&self.parse_jinja_tag()?, self.language) == "if" {
             while !closed {
                 while self
                     .chars
@@ -2672,7 +2672,7 @@ impl<'s> Parser<'s> {
                 let mut lookahead = self.chars.clone();
                 match (lookahead.next(), lookahead.next()) {
                     (Some((_, '{')), Some((_, '%'))) => {
-                        match parse_jinja_tag_name(&self.parse_jinja_tag()?) {
+                        match parse_jinja_tag_name(&self.parse_jinja_tag()?, self.language) {
                             "endif" => closed = true,
                             "elif" | "else" => {}
                             // A nested block can't be part of a tag name.
@@ -3110,7 +3110,12 @@ fn is_attr_name_char(c: char) -> bool {
     !matches!(c, '"' | '\'' | '>' | '/' | '=') && !c.is_ascii_whitespace()
 }
 
-pub fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>) -> &'s str {
+/// Django names a tag by its first whitespace-delimited token (`token.contents.split()[0]`),
+/// so `{% cotton:slot x %}` is `cotton:slot`.
+pub fn parse_jinja_tag_name<'s>(tag: &JinjaTag<'s>, language: Language) -> &'s str {
+    if language == Language::Django {
+        return tag.content.split_whitespace().next().unwrap_or_default();
+    }
     let trimmed = tag.content.trim_start_matches(['+', '-']).trim_start();
     trimmed
         .split_once(|c: char| !c.is_ascii_alphanumeric() && c != '_')
