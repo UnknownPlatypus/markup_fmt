@@ -1773,31 +1773,17 @@ impl<'s> Parser<'s> {
             match self.chars.peek() {
                 Some((i, '<')) => {
                     let i = *i;
-                    let mut chars = self.chars.clone();
-                    chars.next();
-                    if chars.next_if(|(_, c)| *c == '/').is_some()
-                        && chars
-                            .by_ref()
-                            .zip(tag_name.chars())
-                            .all(|((_, a), b)| a.eq_ignore_ascii_case(&b))
+                    let rest = unsafe { self.source.get_unchecked(i + 1..) };
+                    if let Some(rest) = rest.strip_prefix('/')
+                        && starts_with_tag_name(rest, tag_name)
                     {
                         if nested == 0 {
                             end = i;
                             break;
-                        } else {
-                            nested -= 1;
-                            self.chars = chars;
-                            continue;
                         }
-                    } else if allow_nested
-                        && chars
-                            .by_ref()
-                            .zip(tag_name.chars())
-                            .all(|((_, a), b)| a.eq_ignore_ascii_case(&b))
-                    {
+                        nested -= 1;
+                    } else if allow_nested && starts_with_tag_name(rest, tag_name) {
                         nested += 1;
-                        self.chars = chars;
-                        continue;
                     }
                     self.chars.next();
                 }
@@ -2837,6 +2823,13 @@ fn is_special_tag_name_char(c: char, language: Language) -> bool {
         Language::Jinja => c == '{',
         _ => false,
     }
+}
+
+/// Whether `rest` starts with the whole `tag_name`, so `</c-code-block>` doesn't close `<c-code>`.
+fn starts_with_tag_name(rest: &str, tag_name: &str) -> bool {
+    rest.get(..tag_name.len())
+        .is_some_and(|name| name.eq_ignore_ascii_case(tag_name))
+        && !rest[tag_name.len()..].starts_with(is_html_tag_name_char)
 }
 
 fn is_attr_name_char(c: char) -> bool {

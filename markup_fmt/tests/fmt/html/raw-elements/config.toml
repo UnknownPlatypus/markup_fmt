@@ -1,2 +1,2 @@
 [default]
-rawElements = ["c-markdown"]
+rawElements = ["c-markdown", "c-code"]

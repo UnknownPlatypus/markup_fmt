@@ -12,3 +12,4 @@ source: markup_fmt/tests/fmt.rs
   kept   as is</C-Markdown>
 </div>
 <c-markdown></c-markdown>
+<c-code>ends at </c-code-block> no, here:</c-code>
