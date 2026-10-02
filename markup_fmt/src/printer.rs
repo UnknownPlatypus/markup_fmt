@@ -1031,11 +1031,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
                 | (Language::Jinja, Some((_, "trans")))
         );
         let is_trimmed_translation_block = is_translation_block
-            && first_tag.is_some_and(|(tag, _)| {
-                tag.content
-                    .split_ascii_whitespace()
-                    .any(|token| token == "trimmed")
-            });
+            && first_tag.is_some_and(|(tag, _)| helpers::has_bit(tag.content, "trimmed"));
         let is_untrimmed_translation_block = is_translation_block && !is_trimmed_translation_block;
         let state = &State {
             in_trimmed_translation: state.in_trimmed_translation || is_trimmed_translation_block,

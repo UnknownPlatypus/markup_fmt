@@ -26,3 +26,7 @@ source: markup_fmt/tests/fmt.rs
 {% blocktranslate with amount=order.total trimmed %}
   Total: {{ amount }}
 {% endblocktranslate %}
+
+{% blocktranslate with note="x \" trimmed y" %}
+    Kept    as    {{ note }}
+{% endblocktranslate %}

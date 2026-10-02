@@ -135,6 +135,33 @@ pub(crate) fn is_cotton_component(name: &str, language: Language) -> bool {
     language == Language::Django && name.starts_with("c-")
 }
 
+/// Whether `bit` is one of the whitespace-separated bits of a tag's `content`, where a closed
+/// quoted run, whitespace included, stays within its bit as in Django's `smart_split`.
+pub(crate) fn has_bit(content: &str, bit: &str) -> bool {
+    let mut bit_start = 0;
+    let mut chars = content.char_indices();
+    while let Some((i, c)) = chars.next() {
+        if c.is_whitespace() {
+            if &content[bit_start..i] == bit {
+                return true;
+            }
+            bit_start = i + c.len_utf8();
+        } else if matches!(c, '"' | '\'') {
+            // An unclosed quote is a plain character.
+            let mut run = chars.clone();
+            while let Some((_, next)) = run.next() {
+                if next == '\\' {
+                    run.next();
+                } else if next == c {
+                    chars = run;
+                    break;
+                }
+            }
+        }
+    }
+    &content[bit_start..] == bit
+}
+
 pub(crate) fn is_html_tag(name: &str, language: Language) -> bool {
     match language {
         Language::Html
