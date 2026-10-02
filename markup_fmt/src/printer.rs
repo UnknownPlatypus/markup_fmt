@@ -1023,10 +1023,7 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
         // See https://docs.djangoproject.com/en/6.1/topics/i18n/translation/#blocktranslate-template-tag
         let is_untrimmed_translation_block = match (ctx.language, first_tag) {
             (Language::Django, Some((tag, "blocktrans" | "blocktranslate")))
-            | (Language::Jinja, Some((tag, "trans"))) => !tag
-                .content
-                .split_ascii_whitespace()
-                .any(|token| token == "trimmed"),
+            | (Language::Jinja, Some((tag, "trans"))) => !helpers::has_bit(tag.content, "trimmed"),
             _ => false,
         };
 
