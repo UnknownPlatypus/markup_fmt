@@ -7,6 +7,7 @@
   - [lineBreak](./config/line-break.md)
   - [quotes](./config/quotes.md)
   - [formatComments](./config/format-comments.md)
+  - [formatTemplateComments](./config/format-template-comments.md)
   - [scriptIndent](./config/script-indent.md)
   - [styleIndent](./config/style-indent.md)
   - [closingBracketSameLine](./config/closing-bracket-same-line.md)

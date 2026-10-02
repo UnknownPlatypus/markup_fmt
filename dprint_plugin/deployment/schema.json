@@ -48,6 +48,11 @@
       "type": "boolean",
       "default": false
     },
+    "formatTemplateComments": {
+      "description": "Control whether one space should be inserted at the beginning and end of Django template comments, leaving other comments as-is.",
+      "type": "boolean",
+      "default": false
+    },
     "scriptIndent": {
       "description": "Control whether the code block in the `<script>` tag should be indented or not.",
       "type": "boolean",

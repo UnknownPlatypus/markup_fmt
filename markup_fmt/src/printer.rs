@@ -1067,22 +1067,24 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
     where
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
-        if ctx.options.format_comments {
-            match ctx.language {
-                Language::Jinja => Doc::text("{#")
-                    .append(Doc::line_or_space())
-                    .concat(reflow_with_indent(self.raw.trim(), true))
-                    .nest(ctx.indent_width)
-                    .append(Doc::line_or_space())
-                    .append(Doc::text("#}"))
-                    .group(),
-                Language::Django => Doc::text(format!("{{# {} #}}", self.raw.trim())),
-                _ => unreachable!(),
-            }
-        } else {
-            Doc::text("{#")
-                .concat(reflow_raw(self.raw))
+        match ctx.language {
+            Language::Jinja if ctx.options.format_comments => Doc::text("{#")
+                .append(Doc::line_or_space())
+                .concat(reflow_with_indent(self.raw.trim(), true))
+                .nest(ctx.indent_width)
+                .append(Doc::line_or_space())
                 .append(Doc::text("#}"))
+                .group(),
+            // Django's lexer only reads a single-line `{# #}` as a comment, a multi-line one is text.
+            Language::Django
+                if (ctx.options.format_comments || ctx.options.format_template_comments)
+                    && !self.raw.contains('\n') =>
+            {
+                Doc::text(format!("{{# {} #}}", self.raw.trim()))
+            }
+            _ => Doc::text("{#")
+                .concat(reflow_raw(self.raw))
+                .append(Doc::text("#}")),
         }
     }
 }
