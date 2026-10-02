@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+
+{# Static files #}
+{% load static %}
+{# The page title #}
+{% block title %}{% trans "Title" %}{% endblock %}
+{% block content %}
+<main>
+{% block inner %}a{% endblock %}
+{% block other %}b{% endblock %}
+</main>
+{% endblock %}
+
+
+
+<!-- Scripts -->
+{% comment %}Loaded last{% endcomment %}
+{# Keep this one too #}
+{% block scripts %}<script src="{% static 'x.js' %}"></script>{% endblock %}{% block footer %}c{% endblock %} text {% block extra %}{% endblock %}
+{# Not about the next block #}
+
+{% block more %}{% endblock %}
+{# markup-fmt-ignore #}
+{% block raw %}  keep   as   is  {% endblock %}

@@ -1,0 +1,6 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{% extends "base.html" %}
+{% block a %}a{% endblock %}
+{% block b %}b{% endblock %}
