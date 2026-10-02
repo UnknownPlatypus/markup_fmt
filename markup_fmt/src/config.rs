@@ -78,6 +78,9 @@ pub struct LanguageOptions {
     #[cfg_attr(feature = "config_serde", serde(alias = "formatComments"))]
     pub format_comments: bool,
 
+    #[cfg_attr(feature = "config_serde", serde(alias = "formatTemplateComments"))]
+    pub format_template_comments: bool,
+
     #[cfg_attr(feature = "config_serde", serde(alias = "scriptIndent"))]
     pub script_indent: bool,
     #[cfg_attr(
@@ -245,6 +248,7 @@ impl Default for LanguageOptions {
         LanguageOptions {
             quotes: Quotes::default(),
             format_comments: false,
+            format_template_comments: false,
             script_indent: false,
             html_script_indent: None,
             vue_script_indent: None,

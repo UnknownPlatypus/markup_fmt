@@ -72,6 +72,12 @@ pub(crate) fn resolve_config(
                 }
             },
             format_comments: get_value(&mut config, "formatComments", false, &mut diagnostics),
+            format_template_comments: get_value(
+                &mut config,
+                "formatTemplateComments",
+                false,
+                &mut diagnostics,
+            ),
             script_indent: get_value(&mut config, "scriptIndent", false, &mut diagnostics),
             html_script_indent: get_nullable_value(
                 &mut config,
