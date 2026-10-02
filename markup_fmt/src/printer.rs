@@ -314,7 +314,10 @@ impl<'s> DocGen<'s> for AstroExpr<'s> {
         let templates = self.children.iter().filter_map(|child| {
             if let AstroExprChild::Template(nodes) = child {
                 Some(format_children_without_inserting_linebreak(
-                    nodes, ctx, state,
+                    nodes,
+                    ctx,
+                    state,
+                    &[],
                 ))
             } else {
                 None
@@ -869,7 +872,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             state.indent_level += 1;
             docs.push(leading_ws.nest(ctx.indent_width));
             docs.push(
-                format_children_with_inserting_linebreak(&self.children, ctx, &state)
+                format_children_with_inserting_linebreak(&self.children, ctx, &state, &[])
                     .nest(ctx.indent_width),
             );
             docs.push(trailing_ws);
@@ -897,6 +900,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                 &self.children,
                 ctx,
                 &state,
+                &[],
             ));
             if should_not_indent {
                 // This lets it format like this:
@@ -1495,6 +1499,12 @@ impl<'s> DocGen<'s> for Root<'s> {
         );
         let has_two_more_non_text_children =
             has_two_more_non_text_children(&self.children, ctx.language);
+        let blank_lines =
+            if ctx.language == Language::Django && self.children.iter().any(is_django_extends) {
+                child_template_blank_lines(&self.children)
+            } else {
+                Vec::new()
+            };
 
         if is_whole_document_like
             && !matches!(
@@ -1504,10 +1514,10 @@ impl<'s> DocGen<'s> for Root<'s> {
             || !is_whitespace_sensitive && has_two_more_non_text_children
             || ctx.language == Language::Xml
         {
-            format_children_with_inserting_linebreak(&self.children, ctx, state)
+            format_children_with_inserting_linebreak(&self.children, ctx, state, &blank_lines)
                 .append(Doc::hard_line())
         } else {
-            format_children_without_inserting_linebreak(&self.children, ctx, state)
+            format_children_without_inserting_linebreak(&self.children, ctx, state, &blank_lines)
                 .append(Doc::hard_line())
         }
     }
@@ -2614,10 +2624,12 @@ fn format_children_with_inserting_linebreak<'s, F>(
     children: &[Node<'s>],
     ctx: &mut Ctx<'s, F>,
     state: &State<'s>,
+    blank_lines: &[bool],
 ) -> Doc<'s>
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
+    let blank_line_before = |i: usize| blank_lines.get(i) == Some(&true);
     Doc::list(
         children
             .iter()
@@ -2640,7 +2652,7 @@ where
                                 let is_last = i + 1 == children.len();
                                 if is_all_ascii_whitespace(text_node.raw) {
                                     if !is_first && !is_last {
-                                        if text_node.line_breaks > 1 {
+                                        if text_node.line_breaks > 1 || blank_line_before(i + 1) {
                                             docs.push(Doc::empty_line());
                                         }
                                         docs.push(Doc::hard_line());
@@ -2648,13 +2660,17 @@ where
                                 } else {
                                     if let Some(hard_line) = maybe_hard_line {
                                         docs.push(hard_line);
+                                    } else if blank_line_before(i) {
+                                        docs.push(Doc::empty_line().append(Doc::hard_line()));
                                     } else if let Some(doc) =
                                         should_add_whitespace_before_text_node(text_node, is_first)
                                     {
                                         docs.push(doc);
                                     }
                                     docs.push(text_node.doc(ctx, state));
-                                    if let Some(doc) =
+                                    if blank_line_before(i + 1) {
+                                        docs.push(Doc::empty_line().append(Doc::hard_line()));
+                                    } else if let Some(doc) =
                                         should_add_whitespace_after_text_node(text_node, is_last)
                                     {
                                         docs.push(doc);
@@ -2662,7 +2678,9 @@ where
                                 }
                             }
                             child => {
-                                if let Some(hard_line) = maybe_hard_line {
+                                if follows_a_node(children, i) && blank_line_before(i) {
+                                    docs.push(Doc::empty_line().append(Doc::hard_line()));
+                                } else if let Some(hard_line) = maybe_hard_line {
                                     docs.push(hard_line);
                                 }
                                 docs.push(child.doc(ctx, state));
@@ -2694,14 +2712,86 @@ fn is_text_like(node: &Node, language: Language) -> bool {
     }
 }
 
+fn is_django_extends(node: &Node) -> bool {
+    if let NodeKind::JinjaTag(tag) = &node.kind {
+        parse_jinja_tag_name(tag, Language::Django) == "extends"
+    } else {
+        false
+    }
+}
+
+fn is_django_block(node: &Node, name: &str) -> bool {
+    if let NodeKind::JinjaBlock(block) = &node.kind
+        && let Some(JinjaTagOrChildren::Tag(tag)) = block.body.first()
+    {
+        parse_jinja_tag_name(tag, Language::Django) == name
+    } else {
+        false
+    }
+}
+
+/// Whether a blank line goes before each top-level node of a Django child template, where only
+/// the blocks render: after `{% extends %}` and around each `{% block %}`,
+/// with the comments right above a block kept attached to it.
+fn child_template_blank_lines(children: &[Node]) -> Vec<bool> {
+    let is_comment = |node: &Node| {
+        matches!(
+            node.kind,
+            NodeKind::Comment(..) | NodeKind::JinjaComment(..)
+        ) || is_django_block(node, "comment")
+    };
+    // The comment above `children[i]` with no blank line in between.
+    let comment_above = |i: usize| -> Option<usize> {
+        let mut prev = i.checked_sub(1)?;
+        if let NodeKind::Text(text) = &children[prev].kind {
+            if !is_all_ascii_whitespace(text.raw) || text.line_breaks > 1 {
+                return None;
+            }
+            prev = prev.checked_sub(1)?;
+        }
+        is_comment(&children[prev]).then_some(prev)
+    };
+    let mut block_starts = vec![false; children.len()];
+    for i in (0..children.len()).filter(|&i| is_django_block(&children[i], "block")) {
+        let mut start = i;
+        while let Some(comment) = comment_above(start) {
+            start = comment;
+        }
+        block_starts[start] = true;
+    }
+    let mut prev = None;
+    children
+        .iter()
+        .zip(block_starts)
+        .map(|(child, starts_block)| {
+            if matches!(&child.kind, NodeKind::Text(text) if is_all_ascii_whitespace(text.raw)) {
+                return false;
+            }
+            let blank_line = prev.is_some_and(|prev: &Node| {
+                starts_block || is_django_extends(prev) || is_django_block(prev, "block")
+            });
+            prev = Some(child);
+            blank_line
+        })
+        .collect()
+}
+
+/// Whether no text node sits between `children[i]` and its previous sibling.
+fn follows_a_node(children: &[Node], i: usize) -> bool {
+    i.checked_sub(1)
+        .is_some_and(|prev| !matches!(children[prev].kind, NodeKind::Text(..)))
+}
+
 fn format_children_without_inserting_linebreak<'s, F>(
     children: &[Node<'s>],
     ctx: &mut Ctx<'s, F>,
     state: &State<'s>,
+    blank_lines: &[bool],
 ) -> Doc<'s>
 where
     F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
 {
+    let blank_line_before = |i: usize| blank_lines.get(i) == Some(&true);
     Doc::list(
         children
             .iter()
@@ -2715,7 +2805,12 @@ where
                         let is_first = i == 0;
                         let is_last = i + 1 == children.len();
                         if !is_first && !is_last && is_all_ascii_whitespace(text_node.raw) {
-                            match text_node.line_breaks {
+                            let line_breaks = if blank_line_before(i + 1) {
+                                2
+                            } else {
+                                text_node.line_breaks
+                            };
+                            match line_breaks {
                                 0 => {
                                     if !is_prev_text_like
                                         && children
@@ -2736,17 +2831,25 @@ where
                             return (docs, true);
                         }
 
-                        if let Some(doc) =
+                        if blank_line_before(i) {
+                            docs.push(Doc::empty_line().append(Doc::hard_line()));
+                        } else if let Some(doc) =
                             should_add_whitespace_before_text_node(text_node, is_first)
                         {
                             docs.push(doc);
                         }
                         docs.push(text_node.doc(ctx, state));
-                        if let Some(doc) = should_add_whitespace_after_text_node(text_node, is_last)
+                        if blank_line_before(i + 1) {
+                            docs.push(Doc::empty_line().append(Doc::hard_line()));
+                        } else if let Some(doc) =
+                            should_add_whitespace_after_text_node(text_node, is_last)
                         {
                             docs.push(doc);
                         }
                     } else {
+                        if follows_a_node(children, i) && blank_line_before(i) {
+                            docs.push(Doc::empty_line().append(Doc::hard_line()));
+                        }
                         docs.push(child.kind.doc(ctx, state))
                     }
                     (docs, is_text_like(child, ctx.language))
@@ -2914,6 +3017,7 @@ where
                     indent_level: state.indent_level + 1,
                     ..*state
                 },
+                &[],
             ))
             .nest(ctx.indent_width)
             .append(format_ws_sensitive_trailing_ws(children)),

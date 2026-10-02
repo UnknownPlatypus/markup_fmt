@@ -1,0 +1,6 @@
+---
+source: markup_fmt/tests/fmt.rs
+---
+{% load i18n %}
+{% block a %}a{% endblock %}{% block b %}b{% endblock %}
+{% block c %}c{% endblock %}
