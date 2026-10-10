@@ -750,7 +750,10 @@ impl<'s> DocGen<'s> for Element<'s> {
                             };
                             let formatted = if matches!(
                                 ctx.language,
-                                Language::Jinja | Language::Mustache | Language::Vento
+                                Language::Jinja
+                                    | Language::Django
+                                    | Language::Mustache
+                                    | Language::Vento
                             ) {
                                 ctx.try_format_script(text_node.raw, lang, text_node.start, &state)
                                     .ok()

@@ -350,4 +350,18 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn rejected_django_script_is_kept_dedented() {
+        let input =
+            "<div>\n<script>\n        if (a) {\n          {{ b }};\n        }\n</script>\n</div>\n";
+        let output = format_text(input, Language::Django, &Default::default(), |_, _| {
+            Err(anyhow::anyhow!("rejected"))
+        })
+        .unwrap();
+        assert_eq!(
+            output,
+            "<div>\n  <script>\n  if (a) {\n    {{ b }};\n  }\n  </script>\n</div>\n"
+        );
+    }
 }
