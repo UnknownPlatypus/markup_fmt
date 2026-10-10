@@ -3007,6 +3007,19 @@ where
 {
     let has_single = attr_value.contains('\'');
     let has_double = attr_value.contains('"');
+    let has_preferred = match ctx.options.quotes {
+        Quotes::Double => has_double,
+        Quotes::Single => has_single,
+    };
+    // Django and Jinja lex `{{ }}` and `{% %}` before HTML, so the preferred quote inside
+    // them never clashes with the delimiter, and swapping it would guess at the rendered value.
+    if let Some(quote) = initial_quote
+        && has_preferred
+        && matches!(ctx.language, Language::Jinja | Language::Django)
+        && helpers::has_template_interpolation(attr_value, ctx.language)
+    {
+        return Doc::char(quote);
+    }
     if has_double && has_single {
         if let Some(quote) = initial_quote {
             Doc::char(quote)

@@ -7,3 +7,7 @@ source: markup_fmt/tests/fmt.rs
 <div title="{% translate 'You don\'t have permission.' context 'x' %}"></div>
 <div data-x='{% trans "Say \"hi\" or don\'t" %}'></div>
 <div title="{# don't treat this apostrophe as a string #}"></div>
+<div aria-label="{% translate "Price:" %} {{ label|safe }}"></div>
+<div title="{{ label }}"></div>
+<div title='{{ label|default:"x" }}'></div>
+<div title="{% url 'x' %}"></div>
