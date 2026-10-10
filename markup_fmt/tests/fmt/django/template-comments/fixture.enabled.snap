@@ -11,6 +11,5 @@ source: markup_fmt/tests/fmt.rs
 <div {# attr #}></div>
 {# markup-fmt-ignore #}
 <div   ></div>
-{#- jinja habit -#}
 {#-no-spaces-#}
 {#trailing dash -#}
