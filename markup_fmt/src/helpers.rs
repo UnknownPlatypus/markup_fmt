@@ -141,7 +141,8 @@ pub(crate) fn has_bit(content: &str, bit: &str) -> bool {
     let mut bit_start = 0;
     let mut chars = content.char_indices();
     while let Some((i, c)) = chars.next() {
-        if c.is_whitespace() {
+        // Python's `\s`: Unicode whitespace plus U+001C to U+001F.
+        if c.is_whitespace() || ('\x1C'..='\x1F').contains(&c) {
             if &content[bit_start..i] == bit {
                 return true;
             }

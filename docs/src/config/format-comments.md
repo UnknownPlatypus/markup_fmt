@@ -5,6 +5,8 @@ comments should be indented properly or not.
 
 When this option is set to `false`, comments contain leading or trailing whitespace will still be kept as-is.
 
+A Django `{# ... #}` spanning several lines is text to Django, so it is kept as-is either way.
+
 Default option is `false`.
 
 ## Example for `false`

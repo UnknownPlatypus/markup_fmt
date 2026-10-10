@@ -35,3 +35,7 @@ text
 
 {# markup-fmt-ignore #}
 {% block raw %}  keep   as   is  {% endblock %}
+
+{% block trailing %}x{% endblock %}{# closes trailing, not about the next block #}
+
+{% block after %}y{% endblock %}

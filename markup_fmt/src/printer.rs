@@ -1069,22 +1069,28 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
         match ctx.language {
-            Language::Jinja if ctx.options.format_comments => Doc::text("{#")
-                .append(Doc::line_or_space())
-                .concat(reflow_with_indent(self.raw.trim(), true))
-                .nest(ctx.indent_width)
-                .append(Doc::line_or_space())
-                .append(Doc::text("#}"))
-                .group(),
+            Language::Jinja
+                if ctx.options.format_comments || ctx.options.format_template_comments =>
+            {
+                Doc::text("{#")
+                    .append(Doc::line_or_space())
+                    .concat(reflow_with_indent(self.raw.trim(), true))
+                    .nest(ctx.indent_width)
+                    .append(Doc::line_or_space())
+                    .append(Doc::text("#}"))
+                    .group()
+            }
             // Django's lexer only reads a single-line `{# #}` as a comment, a multi-line one is text.
             // Dashes from Jinja-style `{#- x -#}` are plain text in Django; keep them as written.
             Language::Django
                 if (ctx.options.format_comments || ctx.options.format_template_comments)
-                    && !self.raw.contains('\n')
                     && !self.raw.starts_with('-')
-                    && !self.raw.ends_with('-') =>
+                    && !self.raw.ends_with('-')
+                    && !self.raw.contains('\n') =>
             {
-                Doc::text(format!("{{# {} #}}", self.raw.trim()))
+                Doc::text("{# ")
+                    .append(Doc::text(self.raw.trim()))
+                    .append(Doc::text(" #}"))
             }
             _ => Doc::text("{#")
                 .concat(reflow_raw(self.raw))
@@ -1499,12 +1505,25 @@ impl<'s> DocGen<'s> for Root<'s> {
         );
         let has_two_more_non_text_children =
             has_two_more_non_text_children(&self.children, ctx.language);
-        let blank_lines =
-            if ctx.language == Language::Django && self.children.iter().any(is_django_extends) {
-                child_template_blank_lines(&self.children)
-            } else {
-                Vec::new()
-            };
+        // Django only accepts `extends` as the first tag; HTML before it is text.
+        let is_child_template = ctx.language == Language::Django
+            && self
+                .children
+                .iter()
+                .find(|child| {
+                    matches!(
+                        child.kind,
+                        NodeKind::JinjaTag(..)
+                            | NodeKind::JinjaBlock(..)
+                            | NodeKind::JinjaInterpolation(..)
+                    )
+                })
+                .is_some_and(|child| jinja_tag_name(child, Language::Django) == Some("extends"));
+        let blank_lines = if is_child_template {
+            child_template_blank_lines(&self.children)
+        } else {
+            Vec::new()
+        };
 
         if is_whole_document_like
             && !matches!(
@@ -2712,68 +2731,68 @@ fn is_text_like(node: &Node, language: Language) -> bool {
     }
 }
 
-fn is_django_extends(node: &Node) -> bool {
-    if let NodeKind::JinjaTag(tag) = &node.kind {
-        parse_jinja_tag_name(tag, Language::Django) == "extends"
-    } else {
-        false
-    }
-}
-
-fn is_django_block(node: &Node, name: &str) -> bool {
-    if let NodeKind::JinjaBlock(block) = &node.kind
-        && let Some(JinjaTagOrChildren::Tag(tag)) = block.body.first()
-    {
-        parse_jinja_tag_name(tag, Language::Django) == name
-    } else {
-        false
-    }
+/// The name of the `{% %}` tag at `node`, or of the tag opening its block.
+fn jinja_tag_name<'s>(node: &Node<'s>, language: Language) -> Option<&'s str> {
+    let tag = match &node.kind {
+        NodeKind::JinjaTag(tag) => tag,
+        NodeKind::JinjaBlock(block) => match block.body.first() {
+            Some(JinjaTagOrChildren::Tag(tag)) => tag,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(parse_jinja_tag_name(tag, language))
 }
 
 /// Whether a blank line goes before each top-level node of a Django child template, where only
-/// the blocks render: after `{% extends %}` and around each `{% block %}`,
-/// with the comments right above a block kept attached to it.
+/// the blocks render: after `{% extends %}` and around each `{% block %}`, comments above it included.
 fn child_template_blank_lines(children: &[Node]) -> Vec<bool> {
-    let is_comment = |node: &Node| {
-        matches!(
-            node.kind,
+    let mut blank_lines = vec![false; children.len()];
+    let mut first = None;
+    let mut prev: Option<&Node> = None;
+    // The first comment of the run of comments directly above the current node.
+    let mut run_start = None;
+    // Line breaks in the whitespace before the current node, `None` right after a node.
+    let mut gap = Some(1);
+    for (i, child) in children.iter().enumerate() {
+        if let NodeKind::Text(text) = &child.kind
+            && is_all_ascii_whitespace(text.raw)
+        {
+            gap = Some(text.line_breaks);
+            continue;
+        }
+        let begins_line = gap.is_some_and(|breaks| breaks > 0);
+        let no_blank_line = !gap.is_some_and(|breaks| breaks > 1);
+        gap = None;
+        let name = jinja_tag_name(child, Language::Django);
+        if matches!(
+            child.kind,
             NodeKind::Comment(..) | NodeKind::JinjaComment(..)
-        ) || is_django_block(node, "comment")
-    };
-    // The comment above `children[i]` with no blank line in between.
-    let comment_above = |i: usize| -> Option<usize> {
-        let mut prev = i.checked_sub(1)?;
-        if let NodeKind::Text(text) = &children[prev].kind {
-            if !is_all_ascii_whitespace(text.raw) || text.line_breaks > 1 {
-                return None;
+        ) || name == Some("comment")
+        {
+            run_start = match run_start {
+                Some(start) if no_blank_line => Some(start),
+                _ if begins_line => Some(i),
+                // A comment trailing a node on its line belongs to that node.
+                _ => continue,
+            };
+        } else {
+            if name == Some("block") {
+                let start = run_start.filter(|_| no_blank_line).unwrap_or(i);
+                blank_lines[start] |= first.is_some_and(|first| first < start);
             }
-            prev = prev.checked_sub(1)?;
+            run_start = None;
         }
-        is_comment(&children[prev]).then_some(prev)
-    };
-    let mut block_starts = vec![false; children.len()];
-    for i in (0..children.len()).filter(|&i| is_django_block(&children[i], "block")) {
-        let mut start = i;
-        while let Some(comment) = comment_above(start) {
-            start = comment;
-        }
-        block_starts[start] = true;
+        blank_lines[i] |= prev.is_some_and(|prev| {
+            matches!(
+                jinja_tag_name(prev, Language::Django),
+                Some("extends" | "block")
+            )
+        });
+        first.get_or_insert(i);
+        prev = Some(child);
     }
-    let mut prev = None;
-    children
-        .iter()
-        .zip(block_starts)
-        .map(|(child, starts_block)| {
-            if matches!(&child.kind, NodeKind::Text(text) if is_all_ascii_whitespace(text.raw)) {
-                return false;
-            }
-            let blank_line = prev.is_some_and(|prev: &Node| {
-                starts_block || is_django_extends(prev) || is_django_block(prev, "block")
-            });
-            prev = Some(child);
-            blank_line
-        })
-        .collect()
+    blank_lines
 }
 
 /// Whether no text node sits between `children[i]` and its previous sibling.
