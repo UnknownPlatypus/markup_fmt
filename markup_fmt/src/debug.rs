@@ -49,6 +49,7 @@ where
             in_svg: false,
             indent_level: 0,
             in_attr_loop: false,
+            in_trimmed_translation: false,
         },
     );
     if !ctx.external_formatter_errors.is_empty() {

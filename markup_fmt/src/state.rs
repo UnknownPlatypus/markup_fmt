@@ -7,4 +7,6 @@ pub(crate) struct State<'s> {
     /// Inside a `{% for %}` block used as an attribute, where body-edge whitespace
     /// separates loop iterations.
     pub(crate) in_attr_loop: bool,
+    /// Inside a trimmed translation block, where any added line break changes the msgid.
+    pub(crate) in_trimmed_translation: bool,
 }
