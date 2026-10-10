@@ -486,6 +486,7 @@ impl<'s> DocGen<'s> for Element<'s> {
             in_svg: tag_name.eq_ignore_ascii_case("svg"),
             indent_level: state.indent_level,
             in_attr_loop: false,
+            in_trimmed_translation: state.in_trimmed_translation,
         };
 
         let self_closing = if helpers::is_void_element(tag_name, ctx.language) {
@@ -511,11 +512,14 @@ impl<'s> DocGen<'s> for Element<'s> {
         } else {
             self.self_closing
         };
-        let is_whitespace_sensitive = !(matches!(ctx.language, Language::Vue)
-            && is_root
-            && self.tag_name.eq_ignore_ascii_case("template")
-            || state.in_svg)
-            && ctx.is_whitespace_sensitive(tag_name);
+        let is_whitespace_sensitive = state.in_trimmed_translation
+            || !(matches!(ctx.language, Language::Vue)
+                && is_root
+                && self.tag_name.eq_ignore_ascii_case("template")
+                || state.in_svg)
+                && ctx.is_whitespace_sensitive(tag_name);
+        let closing_bracket_same_line =
+            ctx.options.closing_bracket_same_line || state.in_trimmed_translation;
         let is_empty = is_empty_element(&self.children, is_whitespace_sensitive);
 
         let mut docs = Vec::with_capacity(5);
@@ -533,7 +537,7 @@ impl<'s> DocGen<'s> for Element<'s> {
                     docs.push(Doc::char('>'));
                     return Doc::list(docs).group();
                 }
-                if is_empty || !is_whitespace_sensitive {
+                if is_empty || !is_whitespace_sensitive || state.in_trimmed_translation {
                     docs.push(Doc::char('>'));
                 } else {
                     docs.push(Doc::line_or_nil().append(Doc::char('>')).group());
@@ -609,13 +613,13 @@ impl<'s> DocGen<'s> for Element<'s> {
                 }
                 if self.void_element {
                     docs.push(attrs);
-                    if !ctx.options.closing_bracket_same_line {
+                    if !closing_bracket_same_line {
                         docs.push(Doc::line_or_nil());
                     }
                     docs.push(Doc::char('>'));
                     return Doc::list(docs).group();
                 }
-                if ctx.options.closing_bracket_same_line {
+                if closing_bracket_same_line {
                     docs.push(attrs.append(Doc::char('>')).group());
                 } else {
                     // for #16
@@ -1017,13 +1021,20 @@ impl<'s> DocGen<'s> for JinjaBlock<'s, Node<'s>> {
         // An untrimmed translation body is the gettext msgid, so every byte of it,
         // the closing tag's indentation included, must survive formatting.
         // See https://docs.djangoproject.com/en/6.1/topics/i18n/translation/#blocktranslate-template-tag
-        let is_untrimmed_translation_block = match (ctx.language, first_tag) {
-            (Language::Django, Some((tag, "blocktrans" | "blocktranslate")))
-            | (Language::Jinja, Some((tag, "trans"))) => !tag
-                .content
+        let is_translation_block = matches!(
+            (ctx.language, first_tag),
+            (Language::Django, Some((_, "blocktrans" | "blocktranslate")))
+                | (Language::Jinja, Some((_, "trans")))
+        );
+        let is_trimmed = first_tag.is_some_and(|(tag, _)| {
+            tag.content
                 .split_ascii_whitespace()
-                .any(|token| token == "trimmed"),
-            _ => false,
+                .any(|token| token == "trimmed")
+        });
+        let is_untrimmed_translation_block = is_translation_block && !is_trimmed;
+        let state = &State {
+            in_trimmed_translation: is_translation_block && is_trimmed,
+            ..*state
         };
 
         Doc::list(
