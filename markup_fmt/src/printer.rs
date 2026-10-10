@@ -1342,13 +1342,24 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                     }
                 }
             };
+            // Django `{{ }}` are formatted like in text, after the value's own whitespace
+            // handling ran on a masked copy that can't reach into their string arguments.
+            let interpolated = (matches!(ctx.language, Language::Django) && value.contains("{{"))
+                .then(|| {
+                    let (statics, dynamics) =
+                        parse_as_interpolated(&value, value_start, ctx.language, true);
+                    (mask_interpolations(&statics), dynamics)
+                });
             let quote;
             let mut docs = Vec::with_capacity(5);
             docs.push(name);
             docs.push(Doc::char('='));
             if helpers::should_be_space_separated(self.name, state.current_tag_name) {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
-                let value = value.trim();
+                let value = interpolated
+                    .as_ref()
+                    .map_or(&*value, |(masked, _)| masked)
+                    .trim();
                 let maybe_line_break = if value.contains('\n') {
                     Doc::hard_line()
                 } else {
@@ -1362,7 +1373,15 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                                 .trim()
                                 .lines()
                                 .filter(|line| !line.is_empty())
-                                .map(|line| Doc::text(line.split_ascii_whitespace().join(" "))),
+                                .map(|line| {
+                                    let line = line.split_ascii_whitespace().join(" ");
+                                    Doc::text(match &interpolated {
+                                        Some((_, dynamics)) => restore_interpolations(
+                                            &line, dynamics, true, ctx, state,
+                                        ),
+                                        None => line,
+                                    })
+                                }),
                             Doc::hard_line(),
                         ))
                         .nest(ctx.indent_width),
@@ -1384,7 +1403,11 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                     .is_some_and(|name| name.eq_ignore_ascii_case("input"))
             {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
-                if helpers::has_template_interpolation(&value, ctx.language) {
+                if let Some((masked, dynamics)) = &interpolated {
+                    docs.extend(reflow_owned(&restore_interpolations(
+                        masked, dynamics, true, ctx, state,
+                    )));
+                } else if helpers::has_template_interpolation(&value, ctx.language) {
                     docs.extend(reflow_owned(&value));
                 } else {
                     docs.push(Doc::text(
@@ -1397,7 +1420,13 @@ impl<'s> DocGen<'s> for NativeAttribute<'s> {
                 }
             } else {
                 quote = compute_attr_value_quote(&value, self.quote, ctx);
-                docs.extend(reflow_owned(&value));
+                if let Some((masked, dynamics)) = &interpolated {
+                    docs.extend(reflow_owned(&restore_interpolations(
+                        masked, dynamics, true, ctx, state,
+                    )));
+                } else {
+                    docs.extend(reflow_owned(&value));
+                }
             }
             docs.insert(2, quote.clone());
             docs.push(quote);
