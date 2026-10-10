@@ -1077,9 +1077,12 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
                 .append(Doc::text("#}"))
                 .group(),
             // Django's lexer only reads a single-line `{# #}` as a comment, a multi-line one is text.
+            // Dashes from Jinja-style `{#- x -#}` are plain text in Django; keep them as written.
             Language::Django
                 if (ctx.options.format_comments || ctx.options.format_template_comments)
-                    && !self.raw.contains('\n') =>
+                    && !self.raw.contains('\n')
+                    && !self.raw.starts_with('-')
+                    && !self.raw.ends_with('-') =>
             {
                 Doc::text(format!("{{# {} #}}", self.raw.trim()))
             }
