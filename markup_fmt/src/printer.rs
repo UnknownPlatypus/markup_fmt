@@ -1080,17 +1080,15 @@ impl<'s> DocGen<'s> for JinjaComment<'s> {
         F: for<'a> FnMut(&'a str, Hints) -> Result<Cow<'a, str>, Error>,
     {
         match ctx.language {
-            Language::Jinja
-                if ctx.options.format_comments || ctx.options.format_template_comments =>
-            {
-                Doc::text("{#")
-                    .append(Doc::line_or_space())
-                    .concat(reflow_with_indent(self.raw.trim(), true))
-                    .nest(ctx.indent_width)
-                    .append(Doc::line_or_space())
-                    .append(Doc::text("#}"))
-                    .group()
-            }
+            // `formatTemplateComments` is Django-only: Jinja's `{#- x -#}` markers live inside `raw`,
+            // and this arm would print them as `{# - x - #}`.
+            Language::Jinja if ctx.options.format_comments => Doc::text("{#")
+                .append(Doc::line_or_space())
+                .concat(reflow_with_indent(self.raw.trim(), true))
+                .nest(ctx.indent_width)
+                .append(Doc::line_or_space())
+                .append(Doc::text("#}"))
+                .group(),
             // Django's lexer only reads a single-line `{# #}` as a comment, a multi-line one is text.
             // Dashes from Jinja-style `{#- x -#}` are plain text in Django; keep them as written.
             Language::Django

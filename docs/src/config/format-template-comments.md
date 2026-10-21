@@ -8,7 +8,7 @@ Only single-line comments are affected: Django renders a `{# ... #}` spanning se
 A comment whose text starts or ends with `-` is left as written, since Django has no whitespace control
 and the dashes are part of the comment.
 
-In Jinja templates, comments are formatted as [`formatComments`](./format-comments.md) does.
+Jinja templates are not affected: only [`formatComments`](./format-comments.md) formats their comments.
 
 Default option is `false`.
 
